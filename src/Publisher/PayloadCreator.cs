@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -59,7 +58,7 @@ namespace EGBench
                 envelope.MetadataVersion,
                 Data = new
                 {
-                    Prop = new string(Enumerable.Range(1, dataBytesLength).Select(_ => 'a').ToArray())
+                    Prop = new string('a', dataBytesLength)
                 }
             };
 

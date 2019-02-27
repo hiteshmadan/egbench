@@ -37,6 +37,10 @@ namespace EGBench
                         {
                             this.console.WriteLine($"WRN [{DateTime.UtcNow}] HTTP {(int)response.StatusCode} {response.StatusCode} - {response.ReasonPhrase}");
                         }
+                        else
+                        {
+                            Metric.EventsPublished.Increment();
+                        }
                     }
                 }
             }

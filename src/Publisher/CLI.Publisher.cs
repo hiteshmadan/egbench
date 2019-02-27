@@ -71,6 +71,8 @@ namespace EGBench
                         throw new InvalidOperationException($"--rps-per-publisher should be between 1 and 1000 inclusive.");
                     }
 
+                    Metric.Initialize(this.Root);
+
                     var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
                     Action<int, Exception> exit = CreateExitHandler(tcs, console, this.RuntimeInMinutes);
                     var payloadCreator = new PayloadCreator(this.TopicName, this.EventSizeInBytes, this.EventsPerRequest, console);
@@ -85,7 +87,7 @@ namespace EGBench
                     return await tcs.Task;
                 }
 
-                private static Action<int, Exception> CreateExitHandler(TaskCompletionSource<int> tcs, IConsole console, int RuntimeInMinutes)
+                private static Action<int, Exception> CreateExitHandler(TaskCompletionSource<int> tcs, IConsole console, int runtimeInMinutes)
                 {
                     void exitHandler(int returnCode, Exception ex)
                     {
@@ -101,9 +103,9 @@ namespace EGBench
                         }
                     }
 
-                    Task.Delay(TimeSpan.FromMinutes(RuntimeInMinutes)).ContinueWith(t =>
+                    Task.Delay(TimeSpan.FromMinutes(runtimeInMinutes)).ContinueWith(t =>
                     {
-                        console.WriteLine($"--runtime-in-minutes ({RuntimeInMinutes}) Minutes have passed, shutting down publishers.");
+                        console.WriteLine($"--runtime-in-minutes ({runtimeInMinutes}) Minutes have passed, shutting down publishers.");
                         tcs.TrySetResult(0);
                     },
                     TaskScheduler.Default);
