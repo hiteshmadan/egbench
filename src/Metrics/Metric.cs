@@ -1,4 +1,6 @@
-﻿using System;
+﻿// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,15 +13,20 @@ namespace EGBench
 {
     public static class Metric
     {
+        // dummy implementation that negates the need for a thousand null checks all over the place.
+        static Metric() => Initialize(new NoOpMetrics(), nameof(NoOpMetrics));
+
         public static ICounter EventsPublished { get; private set; }
 
         public static ICounter EventsReceived { get; private set; }
 
-        // dummy implementation that negates the need for a thousand null checks all over the place.
-        static Metric() => Initialize(new NoOpMetrics(), nameof(NoOpMetrics));
-
         public static void Initialize(CLI root)
         {
+            if (root == null)
+            {
+                throw new NullReferenceException("root should not be null.");
+            }
+
             (string telegrafAddress, int? telegrafPort)? telegrafConfig = null;
             if (root.TelegrafAddress.HasValue && root.TelegrafPort.HasValue)
             {
@@ -74,7 +81,7 @@ namespace EGBench
             IMetricsRoot metrics = builder.Build();
             Initialize(metrics, runTag);
 
-            Task.Run(ReportingLoop);
+            _ = Task.Run(ReportingLoop);
 
             async Task ReportingLoop()
             {

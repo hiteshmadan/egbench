@@ -1,4 +1,6 @@
-﻿using App.Metrics;
+﻿// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+using App.Metrics;
 using App.Metrics.Filters;
 using App.Metrics.Infrastructure;
 using App.Metrics.Internal;

@@ -1,14 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<RuleSet Name="EventGridBench" Description="Rules for Azure EventGrid Bench" ToolsVersion="15.0">
-  <Include Path="basiccorrectnessrules.ruleset" Action="Default" />
-  <Include Path="basicdesignguidelinerules.ruleset" Action="Default" />
-  <Include Path="extendedcorrectnessrules.ruleset" Action="Default" />
-  <Include Path="extendeddesignguidelinerules.ruleset" Action="Default" />
-  <Include Path="managedminimumrules.ruleset" Action="Default" />
-  <Include Path="minimumrecommendedrules.ruleset" Action="Default" />
-  <Rules AnalyzerId="Microsoft.Analyzers.ManagedCodeAnalysis" RuleNamespace="Microsoft.Rules.Managed">
-    <Rule Id="CA1034" Action="None" />
-    <Rule Id="CA1801" Action="None" />
-	<Rule Id="CA2007" Action="None" />
+<RuleSet Name="EventGridBench" Description="Rules for Azure EventGrid Bench" ToolsVersion="16.0">
+  <Rules AnalyzerId="Microsoft.CodeAnalysis.CSharp" RuleNamespace="Microsoft.CodeAnalysis.CSharp">
+  </Rules>
+  <Rules AnalyzerId="Microsoft.CodeQuality.Analyzers" RuleNamespace="Microsoft.CodeQuality.Analyzers">
+  </Rules>
+  <Rules AnalyzerId="Microsoft.CodeQuality.CSharp.Analyzers" RuleNamespace="Microsoft.CodeQuality.CSharp.Analyzers">
+  </Rules>
+  <Rules AnalyzerId="Microsoft.NetCore.Analyzers" RuleNamespace="Microsoft.NetCore.Analyzers">
+  </Rules>
+  <Rules AnalyzerId="Microsoft.VisualStudio.Threading.Analyzers" RuleNamespace="Microsoft.VisualStudio.Threading.Analyzers">
   </Rules>
 </RuleSet>

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DotNetAnalyzers/StyleCopAnalyzers/master/StyleCop.Analyzers/StyleCop.Analyzers/Settings/stylecop.schema.json",
+  "settings": {
+    "documentationRules": {
+      "companyName": "",
+      "copyrightText": "Licensed under the {licenseName} license. See {licenseFile} file in the project root for full license information.",
+      "variables": {
+        "licenseName": "MIT",
+        "licenseFile": "LICENSE"
+      },
+      "xmlHeader": false,
+      "documentInterfaces": true,
+      "documentExposedElements": false,
+      "documentInternalElements": false,
+      "documentPrivateElements": false,
+      "documentPrivateFields": false
+    },
+    "indentation": {
+      "indentationSize": 4,
+      "useTabs": false
+    },
+    "orderingRules": {
+      "blankLinesBetweenUsingGroups": "omit",
+      "systemUsingDirectivesFirst": true,
+      "usingDirectivesPlacement": "outsideNamespace",
+      "elementOrder": [ "kind", "constant", "accessibility", "static", "readonly" ]
+    },
+    "namingRules": {
+      "allowedHungarianPrefixes": []
+    },
+    "maintainabilityRules": {
+      "topLevelTypes": [ "class", "interface", "struct" ]
+    },
+    "layoutRules": {
+      "allowConsecutiveUsings": true
+    },
+    
+  }
+}

@@ -1,9 +1,10 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+using System.ComponentModel.DataAnnotations;
 using McMaster.Extensions.CommandLineUtils;
 
 namespace EGBench
 {
-
     [Command(Name = "dotnet egbench.dll")]
     [Subcommand(typeof(PublisherCLI), typeof(SubscriberCLI))]
     [HelpOption]
@@ -19,11 +20,15 @@ namespace EGBench
         [Option(LongName = "telegrafPort", Inherited = true)]
         public (bool HasValue, int Value) TelegrafPort { get; set; }
 
-        public static void Main(string[] args) => CommandLineApplication.Execute<CLI>(args);
+        public static void Main(string[] args)
+        {
+            EGBenchLogger.WriteLine($"Received args: {ArgumentEscaper.EscapeAndConcatenate(args)}");
+            CommandLineApplication.Execute<CLI>(args);
+        }
 
         private int OnExecute(CommandLineApplication app, IConsole console)
         {
-            console.WriteLine("You must specify  a subcommand.");
+            EGBenchLogger.WriteLine(console, "You must specify a subcommand.");
             console.WriteLine();
             app.ShowHelp();
             return 1;

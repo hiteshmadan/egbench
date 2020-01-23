@@ -1,21 +1,24 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.2</TargetFramework>
     <RootNamespace>EGBench</RootNamespace>
     <AssemblyName>egbench</AssemblyName>
+    <RuntimeIdentifier>linux-musl-x64</RuntimeIdentifier>
+    <TieredCompilation>false</TieredCompilation>
+    <PublishSingleFile>true</PublishSingleFile>
+    <!-- <PublishTrimmed>true</PublishTrimmed> -->
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="App.Metrics.Core" Version="3.0.0" />
-    <PackageReference Include="App.Metrics.Formatters.InfluxDB" Version="3.0.0" />
-    <PackageReference Include="App.Metrics.Reporting.Console" Version="3.0.0" />
-    <PackageReference Include="App.Metrics.Reporting.Socket" Version="3.0.0" />
-    <PackageReference Include="McMaster.Extensions.CommandLineUtils" Version="2.3.2" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+
+    <PackageReference Include="App.Metrics.Core" Version="3.2.0" />
+    <PackageReference Include="App.Metrics.Formatters.InfluxDB" Version="3.2.0" />
+    <PackageReference Include="App.Metrics.Reporting.Console" Version="3.2.0" />
+    <PackageReference Include="App.Metrics.Reporting.Socket" Version="3.2.0" />
+    <PackageReference Include="McMaster.Extensions.CommandLineUtils" Version="2.5.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
-    <PackageReference Include="Microsoft.AspNetCore.App" Version="$(AspNetCoreAppVer)" AllowExplicitVersion="true" />
-    <PackageReference Include="SpanJson" Version="2.0.6" />
+    <PackageReference Include="SpanJson" Version="3.0.1" />
   </ItemGroup>
 
 </Project>
