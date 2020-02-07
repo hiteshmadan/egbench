@@ -2,11 +2,11 @@
 
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using McMaster.Extensions.CommandLineUtils;
-using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,25 +39,32 @@ namespace EGBench
 
                 public CLI Root => this.Parent.Parent;
 
-                [Option("", "", CommandOptionType.SingleValue)]
+                [Option("-p|--port", "Port on which to listen", CommandOptionType.SingleValue)]
                 [Required]
                 public ushort Port { get; set; }
 
-                [Option("", "", CommandOptionType.SingleValue)]
-                public uint? DelayInMs { get; set; }
-
-                [Option("-t|--runtime-in-minutes", "Time after which the subscriber auto-shuts down.", CommandOptionType.SingleValue)]
+                [Option("-t|--runtime-in-minutes", "Time after which the subscriber auto-shuts down, defaults to 120 minutes.", CommandOptionType.SingleValue)]
                 [Required]
-                public ushort RuntimeInMinutes { get; set; }
+                public ushort RuntimeInMinutes { get; set; } = 120;
+
+                [Option("-m|--meanDelayMs", "Subscriber delays (in milliseconds) are generated via a normal/gaussian distribution, specify the mean of the distribution here.", CommandOptionType.SingleValue)]
+                public uint MeanDelayInMs { get; set; } = 0;
+
+                [Option("-s|--stdDevDelayMs", "Subscriber delays (in milliseconds) are generated via a normal/gaussian distribution, specify the standard deviation of the distribution here.", CommandOptionType.SingleValue)]
+                public uint StdDevDelayInMs { get; set; } = 0;
 
                 public async Task<int> OnExecuteAsync(CommandLineApplication app, IConsole console)
                 {
                     Metric.Initialize(this.Root);
 
-                    this.host = WebHost.
-                        CreateDefaultBuilder<ListenerStartup>(Array.Empty<string>())
-                        .UseKestrel()
-                        .UseUrls($"http://127.0.0.1:{this.Port}")
+                    this.host = new WebHostBuilder()
+                        .UseContentRoot(Directory.GetCurrentDirectory())
+                        .UseKestrel(options =>
+                        {
+                            options.Limits.MinRequestBodyDataRate = null;
+                            options.Limits.MinResponseDataRate = null;
+                        })
+                        .UseUrls($"http://*:{this.Port}")
                         .ConfigureServices(services =>
                         {
                             services.AddSingleton<StartListenerCommand>(this);
@@ -66,15 +73,15 @@ namespace EGBench
                         {
                             lb.SetMinimumLevel(LogLevel.Warning);
                         })
+                        .UseStartup<ListenerStartup>()
                         .Build();
 
                     using (var stopHostCts = new CancellationTokenSource())
                     {
                         await this.host.StartAsync(stopHostCts.Token);
                         TaskCompletionSource<int> tcs = CreateTcs(stopHostCts, this.host, console, this.RuntimeInMinutes);
-
                         string endpointUrl = this.host.ServerFeatures.Get<IServerAddressesFeature>().Addresses.First(s => s.StartsWith("http://", StringComparison.OrdinalIgnoreCase));
-                        console.WriteLine($"Started webserver at {endpointUrl}");
+                        EGBenchLogger.WriteLine(console, $"Started webserver at {endpointUrl}");
                         int result = await tcs.Task;
                         return result;
                     }
@@ -88,7 +95,7 @@ namespace EGBench
                     _ = Task.Delay(TimeSpan.FromMinutes(runtimeInMinutes)).ContinueWith(
                         t =>
                         {
-                            console.WriteLine($"--runtime-in-minutes ({runtimeInMinutes}) Minutes have passed, shutting down publishers.");
+                            EGBenchLogger.WriteLine(console, $"--runtime-in-minutes ({runtimeInMinutes}) Minutes have passed, shutting down publishers.");
                             try
                             {
                                 stopHostCts.Cancel();
@@ -101,7 +108,7 @@ namespace EGBench
                         },
                         TaskScheduler.Default);
 
-                    // on host crash, signal tcs
+                    // on host shutdown, signal tcs
                     _ = host.WaitForShutdownAsync().ContinueWith(
                         t =>
                         {
@@ -111,7 +118,7 @@ namespace EGBench
                             }
                             else
                             {
-                                tcs.TrySetResult(1);
+                                tcs.TrySetResult(0);
                             }
                         },
                         TaskScheduler.Default);

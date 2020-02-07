@@ -14,7 +14,7 @@ using Newtonsoft.Json;
 
 namespace EGBench
 {
-    internal class EventBatchHttpContent : HttpContent
+    internal class EventGridHttpContent : HttpContent
     {
         private const string JsonContentType = "application/json; charset=utf-8";
         private static readonly byte[] JsonStartArray = Encoding.UTF8.GetBytes("[");
@@ -22,11 +22,11 @@ namespace EGBench
         private static readonly byte[] JsonValueDelimiter = Encoding.UTF8.GetBytes(",");
         private static readonly MediaTypeHeaderValue MediaTypeHeaderValue = MediaTypeHeaderValue.Parse(JsonContentType);
 
-        private readonly PayloadCreator creator;
+        private readonly EventGridPayloadCreator creator;
         private readonly byte[] eventTimeBytes;
         private readonly long length;
 
-        public EventBatchHttpContent(PayloadCreator creator)
+        public EventGridHttpContent(EventGridPayloadCreator creator)
         {
             this.creator = creator;
             this.Headers.ContentType = MediaTypeHeaderValue;

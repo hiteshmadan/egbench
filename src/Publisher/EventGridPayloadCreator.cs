@@ -5,26 +5,24 @@ using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Text;
-using System.Threading;
 using McMaster.Extensions.CommandLineUtils;
 using Newtonsoft.Json;
 
 namespace EGBench
 {
-    internal class PayloadCreator
+    internal class EventGridPayloadCreator : IPayloadCreator
     {
         private readonly string serializedEvent;
         private readonly int eventTimeHoleOffset;
         private readonly string prefix;
         private readonly string postfix;
 
-        public PayloadCreator(string topicName, uint eventSizeInBytes, ushort eventsPerRequest, IConsole console)
+        public EventGridPayloadCreator(string topicName, uint eventSizeInBytes, ushort eventsPerRequest, IConsole console)
         {
             this.EventsPerRequest = eventsPerRequest;
 
             string eventTimeString = DateTime.UtcNow.ToString(CultureInfo.InvariantCulture);
 
-            // TODO: Switch on args.TopicSchema when multiple topic schemas are supported
             var envelope = new
             {
                 Id = "id",
@@ -74,14 +72,14 @@ namespace EGBench
 
         internal ushort EventsPerRequest { get; }
 
-        public HttpContent CreateHttpContent() => new EventBatchHttpContent(this);
+        public HttpContent CreateHttpContent() => new EventGridHttpContent(this);
 
         private void Validate(object eventGridEvent, IConsole console)
         {
             string serialized;
             int bytesLength;
             using (var ms = new MemoryStream())
-            using (var content = new EventBatchHttpContent(this))
+            using (var content = new EventGridHttpContent(this))
             {
                 content.SerializeToStreamAsync(ms).GetAwaiter().GetResult();
                 byte[] bytes = ms.ToArray();
@@ -91,8 +89,7 @@ namespace EGBench
 
             object[] eventGridEventArray = new[] { eventGridEvent };
             _ = JsonConvert.DeserializeAnonymousType(serialized, eventGridEventArray);
-            EGBenchLogger.WriteLine(console, $"Sample request payload that'll get sent out, starting publishing in 3 seconds. Request Body size={bytesLength}\n{serialized}");
-            Thread.Sleep(3000);
+            EGBenchLogger.WriteLine(console, $"Sample request payload that'll get sent out: Size={bytesLength} Actual payload=\n{serialized}");
         }
     }
 }

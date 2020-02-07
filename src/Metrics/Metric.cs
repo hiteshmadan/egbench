@@ -34,6 +34,11 @@ namespace EGBench
             }
 
             string runTag = root.RunTag;
+            if (string.IsNullOrEmpty(runTag))
+            {
+                runTag = $"{DateTime.Now}";
+            }
+
             string reporterType = telegrafConfig.HasValue ? "TELEGRAF" : "CONSOLE";
 
             var builder = new MetricsBuilder();
@@ -66,9 +71,6 @@ namespace EGBench
                     });
                     break;
 
-                case "PROMETHEUS":
-                    throw new NotImplementedException(reporterType);
-
                 case "CONSOLE":
                 default:
                     builder.Report.ToConsole(options =>
@@ -81,9 +83,9 @@ namespace EGBench
             IMetricsRoot metrics = builder.Build();
             Initialize(metrics, runTag);
 
-            _ = Task.Run(ReportingLoop);
+            _ = Task.Run(() => ReportingLoop(metrics));
 
-            async Task ReportingLoop()
+            static async Task ReportingLoop(IMetricsRoot @metrics)
             {
                 while (true)
                 {
@@ -91,7 +93,7 @@ namespace EGBench
 
                     try
                     {
-                        await Task.WhenAll(metrics.ReportRunner.RunAllAsync(CancellationToken.None));
+                        await Task.WhenAll(@metrics.ReportRunner.RunAllAsync(CancellationToken.None));
                     }
                     catch (Exception)
                     {

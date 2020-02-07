@@ -15,26 +15,24 @@ namespace EGBench
 
         public static void WriteLine(string s, [CallerFilePath] string callerFilePath = default, [CallerMemberName] string callerMemberName = default, [CallerLineNumber] int callerLineNumber = 0)
         {
-            string fileName = Path.GetFileNameWithoutExtension(callerFilePath);
-            string message = $"{Timestamp}:[{nameof(EGBenchLogger)}] - [{fileName}:{callerMemberName}()@line {callerLineNumber}] {s}";
-            Console.WriteLine(message);
-
-            if (Debugger.IsAttached)
-            {
-                Debug.WriteLine(message);
-            }
+            Console.WriteLine(GetMessage(s, callerFilePath, callerMemberName, callerLineNumber));
         }
 
         public static void WriteLine(IConsole c, string s, [CallerFilePath] string callerFilePath = default, [CallerMemberName] string callerMemberName = default, [CallerLineNumber] int callerLineNumber = 0)
         {
+            c.WriteLine(GetMessage(s, callerFilePath, callerMemberName, callerLineNumber));
+        }
+
+        private static string GetMessage(string s, string callerFilePath, string callerMemberName, int callerLineNumber)
+        {
             string fileName = Path.GetFileNameWithoutExtension(callerFilePath);
             string message = $"{Timestamp}:[{nameof(EGBenchLogger)}] - [{fileName}:{callerMemberName}()@line {callerLineNumber}] {s}";
-            c.WriteLine(message);
-
             if (Debugger.IsAttached)
             {
                 Debug.WriteLine(message);
             }
+
+            return message;
         }
     }
 }

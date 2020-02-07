@@ -4,6 +4,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using McMaster.Extensions.CommandLineUtils;
@@ -44,6 +45,12 @@ namespace EGBench
                 [Required]
                 public string TopicName { get; set; }
 
+                [Option("-s|--topic-schema", "Defaults to EventGrid. Possible values: EventGrid / CloudEventV10 / Custom. Specify the -d|--data-payload property for Custom topic schema.", CommandOptionType.SingleValue)]
+                public string TopicSchema { get; set; } = "EventGrid";
+
+                [Option("-p|--data-payload", "Specify the data payload when -s|--topic-schema=Custom. Either give inline json or a file path.", CommandOptionType.SingleValue)]
+                public string DataPayload { get; set; }
+
                 [Option("-p|--publishers", "Number of concurrent publishing \"threads\", defaults to 10.", CommandOptionType.SingleValue)]
                 public short ConcurrentPublishersCount { get; set; } = 10;
 
@@ -53,7 +60,7 @@ namespace EGBench
                 [Option("-e|--events-per-request", "Number of events in each request, defaults to 10.", CommandOptionType.SingleValue)]
                 public ushort EventsPerRequest { get; set; } = 10;
 
-                [Option("-s|--event-size-in-bytes", "Number of bytes per event, defaults to 1024. Total request payload size = 2 + (EventsPerRequest * (EventSizeInBytes + 1) - 1)", CommandOptionType.SingleValue)]
+                [Option("-b|--event-size-in-bytes", "Number of bytes per event, defaults to 1024, doesn't take effect if -s|--topic-schema==Custom. Total request payload size = 2 + (EventsPerRequest * (EventSizeInBytes + 1) - 1)", CommandOptionType.SingleValue)]
                 public uint EventSizeInBytes { get; set; } = 1024;
 
                 [Option("-t|--runtime-in-minutes", "Time after which the publisher auto-shuts down, defaults to 60 minutes.", CommandOptionType.SingleValue)]
@@ -62,26 +69,34 @@ namespace EGBench
                 [Option("-v|--protocol-version", "The protocol version to use, defaults to 1.1.", CommandOptionType.SingleValue)]
                 public string HttpVersion { get; set; } = "1.1";
 
-                [Option("--skip-ssl-validation", "Skip SSL Server Certificate validation, defaults to false.", CommandOptionType.SingleValue)]
+                [Option("|--skip-ssl-validation", "Skip SSL Server Certificate validation, defaults to false.", CommandOptionType.SingleValue)]
                 public bool SkipServerCertificateValidation { get; set; } = false;
 
                 public async Task<int> OnExecuteAsync(CommandLineApplication app, IConsole console)
                 {
+                    PropertyInfo[] options = this.GetType().GetProperties(BindingFlags.Public).Where(p => p.GetCustomAttribute<OptionAttribute>() != null).ToArray();
+                    EGBenchLogger.WriteLine(console, $"Publisher arguments (merged from cmdline and code defaults): {string.Join("|", options.Select(o => $"{o.Name}={o.GetValue(this).ToString()}"))}");
+
                     if (this.ConcurrentPublishersCount < 1)
                     {
-                        throw new InvalidOperationException($"--publishers should be greater than 1.");
+                        throw new InvalidOperationException($"-p|--publishers should be greater than 1.");
                     }
 
                     if (this.RequestsPerSecondPerPublisher < 1 || this.RequestsPerSecondPerPublisher > 1000)
                     {
-                        throw new InvalidOperationException($"--rps-per-publisher should be between 1 and 1000 inclusive");
+                        throw new InvalidOperationException($"-r|--rps-per-publisher should be between 1 and 1000 inclusive");
                     }
 
-                    Metric.Initialize(this.Root);
+                    IPayloadCreator payloadCreator = this.TopicSchema.ToUpperInvariant() switch
+                    {
+                        "EVENTGRID" => new EventGridPayloadCreator(this.TopicName, this.EventSizeInBytes, this.EventsPerRequest, console),
+                        "CUSTOM" => new CustomPayloadCreator(this.DataPayload, this.EventsPerRequest, console),
+                        _ => throw new NotImplementedException($"Unknown topic schema {this.TopicSchema}")
+                    };
 
+                    Metric.Initialize(this.Root);
                     var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
                     Action<int, Exception> exit = this.CreateExitHandler(tcs, console, this.RuntimeInMinutes);
-                    var payloadCreator = new PayloadCreator(this.TopicName, this.EventSizeInBytes, this.EventsPerRequest, console);
                     var uri = new Uri(this.Address);
 
                     PublishWorker[] workers = Enumerable.Range(1, this.ConcurrentPublishersCount)
@@ -90,14 +105,7 @@ namespace EGBench
 
                     double intervalMs = 1000 / (double)this.RequestsPerSecondPerPublisher;
 
-                    EGBenchLogger.WriteLine($"Starting to publish.\n" +
-                        $"{nameof(this.ConcurrentPublishersCount)}={this.ConcurrentPublishersCount}\n" +
-                        $"{nameof(this.EventsPerRequest)}={this.EventsPerRequest} events\n" +
-                        $"{nameof(this.EventSizeInBytes)}={this.EventSizeInBytes} bytes\n" +
-                        $"{nameof(intervalMs)}={intervalMs} ms\n" +
-                        $"{nameof(this.RequestsPerSecondPerPublisher)}={this.RequestsPerSecondPerPublisher}\n" +
-                        $"Overall RPS={this.ConcurrentPublishersCount * this.RequestsPerSecondPerPublisher}\n");
-
+                    EGBenchLogger.WriteLine(console, $"{nameof(intervalMs)}={intervalMs} ms | Overall RPS={this.ConcurrentPublishersCount * this.RequestsPerSecondPerPublisher}");
                     using (var timer = new Timer(this.OnTimer, (workers, console), Timeout.Infinite, Timeout.Infinite))
                     {
                         timer.Change(TimeSpan.Zero, TimeSpan.FromMilliseconds(intervalMs));

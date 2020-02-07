@@ -16,11 +16,11 @@ namespace EGBench
 {
     public class ListenerStartup : IStartup
     {
-        private readonly uint delayInMs;
+        private readonly int delayInMs;
 
         public ListenerStartup(StartListenerCommand startListenerCommand)
         {
-            this.delayInMs = startListenerCommand.DelayInMs ?? 0;
+            this.delayInMs = (int)Math.Max(0, startListenerCommand.MeanDelayInMs);
         }
 
         public IServiceProvider ConfigureServices(IServiceCollection services) => services.BuildServiceProvider();
@@ -31,7 +31,7 @@ namespace EGBench
         {
             if (this.delayInMs > 0)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(this.delayInMs));
+                await Task.Delay(this.delayInMs);
             }
 
             using (IMemoryOwner<byte> bytes = await context.Request.Body.CopyToPooledMemoryAsync(CancellationToken.None))
@@ -41,7 +41,7 @@ namespace EGBench
 
             context.Response.StatusCode = (int)HttpStatusCode.OK;
 
-            void ParseArray(IMemoryOwner<byte> bytes)
+            static void ParseArray(IMemoryOwner<byte> bytes)
             {
                 var reader = new JsonReader<byte>(bytes.Memory.Span);
                 int count = 0;

@@ -12,19 +12,18 @@ namespace EGBench
     internal class PublishWorker
 #pragma warning restore CA1001 // Types that own disposable fields should be disposable
     {
-        private static readonly Version Version = new Version("1.1");
         private readonly Uri uri;
-        private readonly PayloadCreator payloadCreator;
-        private readonly string httpVersion;
+        private readonly IPayloadCreator payloadCreator;
+        private readonly Version httpVersion;
         private readonly IConsole console;
         private readonly Action<int, Exception> exit;
         private readonly HttpClient httpClient;
 
-        public PublishWorker(Uri uri, PayloadCreator payloadCreator, string httpVersion, bool skipServerCertificateValidation, IConsole console, Action<int, Exception> exit)
+        public PublishWorker(Uri uri, IPayloadCreator payloadCreator, string httpVersion, bool skipServerCertificateValidation, IConsole console, Action<int, Exception> exit)
         {
             this.uri = uri;
             this.payloadCreator = payloadCreator;
-            this.httpVersion = httpVersion;
+            this.httpVersion = new Version(httpVersion);
             this.console = console;
             this.exit = exit;
 
@@ -60,7 +59,7 @@ namespace EGBench
             try
             {
                 using (HttpContent content = this.payloadCreator.CreateHttpContent())
-                using (var request = new HttpRequestMessage(HttpMethod.Post, this.uri) { Content = content, Version = Version })
+                using (var request = new HttpRequestMessage(HttpMethod.Post, this.uri) { Content = content, Version = this.httpVersion })
                 {
                     using (HttpResponseMessage response = await this.httpClient.SendAsync(request))
                     {

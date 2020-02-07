@@ -3,10 +3,12 @@
   <PropertyGroup>
     <RootNamespace>EGBench</RootNamespace>
     <AssemblyName>egbench</AssemblyName>
-    <RuntimeIdentifier>linux-musl-x64</RuntimeIdentifier>
     <TieredCompilation>false</TieredCompilation>
+    <!--
+    <OutputType>exe</OutputType>
     <PublishSingleFile>true</PublishSingleFile>
-    <!-- <PublishTrimmed>true</PublishTrimmed> -->
+    <PublishTrimmed>true</PublishTrimmed>
+    -->
   </PropertyGroup>
 
   <ItemGroup>
