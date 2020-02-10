@@ -27,28 +27,25 @@ namespace EGBench
                 return 1;
             }
 
-            [Command(Name = "start")]
+            [Command(Name = "start", Description = "Start generating load")]
             public class StartPublishCommand
             {
-                private long totalRequestsInitiatedCount = 0;
-                private Timestamp lastLoggedTimestamp = Timestamp.Now;
-
                 public PublisherCLI Parent { get; set; }
 
                 public CLI Root => this.Parent.Parent;
 
-                [Option("-u|--topic-url", "URL to which events should be posted to.", CommandOptionType.SingleValue)]
+                [Option("-u|--topic-url", "REQUIRED. URL to which events should be posted to.", CommandOptionType.SingleValue)]
                 [Required]
                 public string Address { get; set; }
 
-                [Option("-n|--topic-name", "String that should be used for stamping eventgrid event envelope's Topic field.", CommandOptionType.SingleValue)]
+                [Option("-n|--topic-name", "REQUIRED. String that should be used for stamping eventgrid event envelope's Topic field.", CommandOptionType.SingleValue)]
                 [Required]
                 public string TopicName { get; set; }
 
                 [Option("-s|--topic-schema", "Defaults to EventGrid. Possible values: EventGrid / CloudEventV10 / Custom. Specify the -d|--data-payload property for Custom topic schema.", CommandOptionType.SingleValue)]
                 public string TopicSchema { get; set; } = "EventGrid";
 
-                [Option("-p|--data-payload", "Specify the data payload when -s|--topic-schema=Custom. Either give inline json or a file path.", CommandOptionType.SingleValue)]
+                [Option("-d|--data-payload", "Specify the data payload when -s|--topic-schema=Custom. Either give inline json or a file path.", CommandOptionType.SingleValue)]
                 public string DataPayload { get; set; }
 
                 [Option("-p|--publishers", "Number of concurrent publishing \"threads\", defaults to 10.", CommandOptionType.SingleValue)]
@@ -74,8 +71,8 @@ namespace EGBench
 
                 public async Task<int> OnExecuteAsync(CommandLineApplication app, IConsole console)
                 {
-                    PropertyInfo[] options = this.GetType().GetProperties(BindingFlags.Public).Where(p => p.GetCustomAttribute<OptionAttribute>() != null).ToArray();
-                    EGBenchLogger.WriteLine(console, $"Publisher arguments (merged from cmdline and code defaults): {string.Join("|", options.Select(o => $"{o.Name}={o.GetValue(this).ToString()}"))}");
+                    PropertyInfo[] options = this.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.GetCustomAttribute<OptionAttribute>() != null).ToArray();
+                    EGBenchLogger.WriteLine(console, $"Publisher arguments (merged from cmdline and code defaults):\n{string.Join("\n", options.Select(o => $"{o.Name}={o.GetValue(this)}"))}");
 
                     if (this.ConcurrentPublishersCount < 1)
                     {
@@ -94,7 +91,7 @@ namespace EGBench
                         _ => throw new NotImplementedException($"Unknown topic schema {this.TopicSchema}")
                     };
 
-                    Metric.Initialize(this.Root);
+                    // Metric.Initialize(this.Root);
                     var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
                     Action<int, Exception> exit = this.CreateExitHandler(tcs, console, this.RuntimeInMinutes);
                     var uri = new Uri(this.Address);
@@ -103,30 +100,40 @@ namespace EGBench
                         .Select(_ => new PublishWorker(uri, payloadCreator, this.HttpVersion, this.SkipServerCertificateValidation, console, exit))
                         .ToArray();
 
-                    double intervalMs = 1000 / (double)this.RequestsPerSecondPerPublisher;
+                    int timerIntervalMs = (int)(1000 / (double)this.RequestsPerSecondPerPublisher);
+                    EGBenchLogger.WriteLine(console, $"{nameof(timerIntervalMs)}={timerIntervalMs} ms | Desired RPS={this.ConcurrentPublishersCount * this.RequestsPerSecondPerPublisher}");
 
-                    EGBenchLogger.WriteLine(console, $"{nameof(intervalMs)}={intervalMs} ms | Overall RPS={this.ConcurrentPublishersCount * this.RequestsPerSecondPerPublisher}");
-                    using (var timer = new Timer(this.OnTimer, (workers, console), Timeout.Infinite, Timeout.Infinite))
+                    long requestsQueued = 0;
+                    Timestamp lastLoggedTimestamp = Timestamp.Now;
+                    Timestamp beginTimestamp = Timestamp.Now;
+                    for (long iteration = 0; !(tcs.Task.IsCanceled | tcs.Task.IsFaulted | tcs.Task.IsCompletedSuccessfully); iteration++)
                     {
-                        timer.Change(TimeSpan.Zero, TimeSpan.FromMilliseconds(intervalMs));
-                        return await tcs.Task;
-                    }
-                }
+                        foreach (PublishWorker worker in workers)
+                        {
+                            ThreadPool.UnsafeQueueUserWorkItem(worker.PublishFireAndForget, null);
+                        }
 
-                private void OnTimer(object state)
-                {
-                    (PublishWorker[] workers, IConsole console) = ((PublishWorker[], IConsole))state;
-                    foreach (PublishWorker worker in workers)
-                    {
-                        ThreadPool.UnsafeQueueUserWorkItem(worker.PublishFireAndForget, null);
+                        requestsQueued += workers.Length;
+                        if (lastLoggedTimestamp.ElapsedSeconds >= this.Parent.Parent.MetricsIntervalSeconds)
+                        {
+                            lastLoggedTimestamp = Timestamp.Now;
+                            EGBenchLogger.WriteLine(console, $"RPS in last {this.Parent.Parent.MetricsIntervalSeconds} seconds={requestsQueued / (float)this.Parent.Parent.MetricsIntervalSeconds:0.00f}");
+                            requestsQueued = 0;
+                        }
+
+                        Timestamp expectedTimestampNow = beginTimestamp + TimeSpan.FromMilliseconds(iteration * timerIntervalMs);
+                        int lagMs = (int)Math.Ceiling((Timestamp.Now - expectedTimestampNow).TotalMilliseconds);
+                        if (lagMs < timerIntervalMs)
+                        {
+                            Thread.Sleep(timerIntervalMs - lagMs);
+                        }
+                        else
+                        {
+                            // don't sleep, just continue;
+                        }
                     }
 
-                    long newCount = Interlocked.Add(ref this.totalRequestsInitiatedCount, workers.Length);
-                    if (this.lastLoggedTimestamp.ElapsedSeconds >= 60)
-                    {
-                        this.lastLoggedTimestamp = Timestamp.Now;
-                        EGBenchLogger.WriteLine(console, $"{nameof(this.totalRequestsInitiatedCount)}={newCount}");
-                    }
+                    return await tcs.Task;
                 }
 
                 private Action<int, Exception> CreateExitHandler(TaskCompletionSource<int> tcs, IConsole console, int runtimeInMinutes)

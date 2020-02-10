@@ -19,6 +19,11 @@ namespace EGBench
 
         public CustomPayloadCreator(string dataPayload, ushort eventsPerRequest, IConsole console)
         {
+            if (string.IsNullOrWhiteSpace(dataPayload))
+            {
+                throw new InvalidOperationException("-d|--data-payload should either be a valid file path, or inline json object that starts with {.");
+            }
+
             string trimmed = dataPayload.Trim();
             if (trimmed.StartsWith('{'))
             {
@@ -29,9 +34,10 @@ namespace EGBench
             }
             else
             {
-                throw new InvalidOperationException("-p|--data-payload should either be a valid file path, or inline json object that starts with {.");
+                throw new InvalidOperationException("-d|--data-payload should either be a valid file path, or inline json object that starts with {.");
             }
 
+            this.EventsPerRequest = eventsPerRequest;
             byte[] byteArray = new byte[(Encoding.UTF8.GetByteCount(trimmed) * eventsPerRequest) + 2 + (eventsPerRequest - 1)];
 
             Span<byte> eventBytes = Encoding.UTF8.GetBytes(trimmed).AsSpan();
@@ -63,6 +69,8 @@ namespace EGBench
 
             this.Validate(console);
         }
+
+        public ushort EventsPerRequest { get; }
 
         public HttpContent CreateHttpContent()
         {

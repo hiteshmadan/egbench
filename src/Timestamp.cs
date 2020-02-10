@@ -15,8 +15,8 @@ namespace EGBench
     //  - When the machine does not support high frequency CPU tick.
     public struct Timestamp : IEquatable<Timestamp>
     {
-        private static readonly float TimestampToTicks = TimeSpan.TicksPerSecond / (float)Stopwatch.Frequency;
-        private static readonly float TicksToTimestamp = Stopwatch.Frequency / (float)TimeSpan.TicksPerSecond;
+        public static readonly float TimestampToTicks = TimeSpan.TicksPerSecond / (float)Stopwatch.Frequency;
+        public static readonly float TicksToTimestamp = Stopwatch.Frequency / (float)TimeSpan.TicksPerSecond;
 
         [SuppressMessage("Style", "IDE0044:Add readonly modifier", Justification = "false alarm, this is a struct and making this field readonly will result in every read of the struct resetting the value to 0")]
         private long timestamp;

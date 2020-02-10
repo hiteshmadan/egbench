@@ -3,9 +3,11 @@
   <PropertyGroup>
     <RootNamespace>EGBench</RootNamespace>
     <AssemblyName>egbench</AssemblyName>
+    <ApplicationIcon />
+    <OutputType>Exe</OutputType>
+    <StartupObject>EGBench.CLI</StartupObject>
     <TieredCompilation>false</TieredCompilation>
     <!--
-    <OutputType>exe</OutputType>
     <PublishSingleFile>true</PublishSingleFile>
     <PublishTrimmed>true</PublishTrimmed>
     -->

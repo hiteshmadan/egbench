@@ -69,7 +69,7 @@ namespace EGBench
                         }
                         else
                         {
-                            Metric.EventsPublished.Increment();
+                            Metric.EventsPublished.Increment(this.payloadCreator.EventsPerRequest);
                         }
                     }
                 }

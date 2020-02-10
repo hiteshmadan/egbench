@@ -66,11 +66,11 @@ namespace EGBench
             this.Validate(eventGridEvent, console);
         }
 
+        public ushort EventsPerRequest { get; }
+
         internal byte[] PrefixBytes { get; }
 
         internal byte[] PostfixBytes { get; }
-
-        internal ushort EventsPerRequest { get; }
 
         public HttpContent CreateHttpContent() => new EventGridHttpContent(this);
 

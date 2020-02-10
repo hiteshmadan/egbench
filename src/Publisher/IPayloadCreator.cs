@@ -6,6 +6,8 @@ namespace EGBench
 {
     internal interface IPayloadCreator
     {
+        ushort EventsPerRequest { get; }
+
         HttpContent CreateHttpContent();
     }
 }

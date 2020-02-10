@@ -4,6 +4,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using McMaster.Extensions.CommandLineUtils;
@@ -16,7 +17,7 @@ namespace EGBench
 {
     public partial class CLI
     {
-        [Command(Name = "subscriber")]
+        [Command(Name = "subscriber", Description = "HTTP endpoint to act as a webhook sink for eventgrid deliveries.")]
         [Subcommand(typeof(StartListenerCommand))]
         public class SubscriberCLI
         {
@@ -39,12 +40,11 @@ namespace EGBench
 
                 public CLI Root => this.Parent.Parent;
 
-                [Option("-p|--port", "Port on which to listen", CommandOptionType.SingleValue)]
+                [Option("-p|--port", "REQUIRED. Port on which to listen", CommandOptionType.SingleValue)]
                 [Required]
                 public ushort Port { get; set; }
 
-                [Option("-t|--runtime-in-minutes", "Time after which the subscriber auto-shuts down, defaults to 120 minutes.", CommandOptionType.SingleValue)]
-                [Required]
+                [Option("-t|--runtime-in-minutes", "Time after which the subscriber auto-shuts down, defaults to 120 minutes. Set to 0 to never autoshutdown.", CommandOptionType.SingleValue)]
                 public ushort RuntimeInMinutes { get; set; } = 120;
 
                 [Option("-m|--meanDelayMs", "Subscriber delays (in milliseconds) are generated via a normal/gaussian distribution, specify the mean of the distribution here.", CommandOptionType.SingleValue)]
@@ -55,6 +55,9 @@ namespace EGBench
 
                 public async Task<int> OnExecuteAsync(CommandLineApplication app, IConsole console)
                 {
+                    PropertyInfo[] options = this.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.GetCustomAttribute<OptionAttribute>() != null).ToArray();
+                    EGBenchLogger.WriteLine(console, $"Subscriber arguments (merged from cmdline and code defaults):\n{string.Join("\n", options.Select(o => $"{o.Name}={o.GetValue(this)}"))}");
+
                     Metric.Initialize(this.Root);
 
                     this.host = new WebHostBuilder()
@@ -91,22 +94,25 @@ namespace EGBench
                 {
                     var tcs = new TaskCompletionSource<int>();
 
-                    // on runtime expiry, signal stopHostCts and tcs
-                    _ = Task.Delay(TimeSpan.FromMinutes(runtimeInMinutes)).ContinueWith(
-                        t =>
-                        {
-                            EGBenchLogger.WriteLine(console, $"--runtime-in-minutes ({runtimeInMinutes}) Minutes have passed, shutting down publishers.");
-                            try
+                    if (runtimeInMinutes > 0)
+                    {
+                        // on runtime expiry, signal stopHostCts and tcs
+                        _ = Task.Delay(TimeSpan.FromMinutes(runtimeInMinutes)).ContinueWith(
+                            t =>
                             {
-                                stopHostCts.Cancel();
-                                tcs.TrySetResult(0);
-                            }
-                            catch (Exception ex)
-                            {
-                                tcs.TrySetException(ex);
-                            }
-                        },
-                        TaskScheduler.Default);
+                                EGBenchLogger.WriteLine(console, $"--runtime-in-minutes ({runtimeInMinutes}) Minutes have passed, shutting down publishers.");
+                                try
+                                {
+                                    stopHostCts.Cancel();
+                                    tcs.TrySetResult(0);
+                                }
+                                catch (Exception ex)
+                                {
+                                    tcs.TrySetException(ex);
+                                }
+                            },
+                            TaskScheduler.Default);
+                    }
 
                     // on host shutdown, signal tcs
                     _ = host.WaitForShutdownAsync().ContinueWith(

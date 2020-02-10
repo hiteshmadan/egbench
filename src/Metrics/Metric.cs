@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using App.Metrics;
 using App.Metrics.Counter;
+using App.Metrics.Filtering;
 using App.Metrics.Formatters.InfluxDB;
 using App.Metrics.Reporting.Socket.Client;
 
@@ -13,12 +14,50 @@ namespace EGBench
 {
     public static class Metric
     {
-        // dummy implementation that negates the need for a thousand null checks all over the place.
-        static Metric() => Initialize(new NoOpMetrics(), nameof(NoOpMetrics));
+        private const string Context = "EGBench";
+        private static readonly object LockObj = new object();
+        private static ICounter eventsPublished;
+        private static ICounter eventsReceived;
+        private static IMetrics metrics = new NoOpMetrics();
+        private static string runTag;
 
-        public static ICounter EventsPublished { get; private set; }
+        public static ICounter EventsPublished
+        {
+            get
+            {
+                if (eventsPublished == null)
+                {
+                    lock (LockObj)
+                    {
+                        if (eventsPublished == null)
+                        {
+                            eventsPublished = CreateCounter(metrics, nameof(EventsPublished), ("Run-Tag", runTag));
+                        }
+                    }
+                }
 
-        public static ICounter EventsReceived { get; private set; }
+                return eventsPublished;
+            }
+        }
+
+        public static ICounter EventsReceived
+        {
+            get
+            {
+                if (eventsReceived == null)
+                {
+                    lock (LockObj)
+                    {
+                        if (eventsReceived == null)
+                        {
+                            eventsReceived = CreateCounter(metrics, nameof(EventsReceived), ("Run-Tag", runTag));
+                        }
+                    }
+                }
+
+                return eventsReceived;
+            }
+        }
 
         public static void Initialize(CLI root)
         {
@@ -31,12 +70,6 @@ namespace EGBench
             if (root.TelegrafAddress.HasValue && root.TelegrafPort.HasValue)
             {
                 telegrafConfig = (root.TelegrafAddress.Value, root.TelegrafPort.Value);
-            }
-
-            string runTag = root.RunTag;
-            if (string.IsNullOrEmpty(runTag))
-            {
-                runTag = $"{DateTime.Now}";
             }
 
             string reporterType = telegrafConfig.HasValue ? "TELEGRAF" : "CONSOLE";
@@ -59,6 +92,7 @@ namespace EGBench
 
                     builder.Report.OverUdp(options =>
                     {
+                        options.Filter = new MetricsFilter().WhereContext(Context);
                         options.SocketSettings.Address = telegrafConfig.Value.telegrafAddress;
                         options.SocketSettings.Port = telegrafConfig.Value.telegrafPort.Value;
                         options.MetricsOutputFormatter = outputFormatter;
@@ -76,20 +110,23 @@ namespace EGBench
                     builder.Report.ToConsole(options =>
                     {
                         options.MetricsOutputFormatter = outputFormatter;
+                        options.Filter = new MetricsFilter().WhereContext(Context);
                     });
                     break;
             }
 
-            IMetricsRoot metrics = builder.Build();
-            Initialize(metrics, runTag);
+            IMetricsRoot metricsRoot = builder.Build();
 
-            _ = Task.Run(() => ReportingLoop(metrics));
+            metrics = metricsRoot;
+            runTag = root.RunTag;
 
-            static async Task ReportingLoop(IMetricsRoot @metrics)
+            _ = Task.Run(() => ReportingLoop(metricsRoot, root.MetricsIntervalSeconds));
+
+            static async Task ReportingLoop(IMetricsRoot @metrics, int metricsIntervalSeconds)
             {
                 while (true)
                 {
-                    await Task.Delay(60 * 1000);
+                    await Task.Delay(metricsIntervalSeconds * 1000);
 
                     try
                     {
@@ -103,12 +140,6 @@ namespace EGBench
             }
         }
 
-        private static void Initialize(IMetrics metrics, string runTag)
-        {
-            EventsPublished = CreateCounter(metrics, nameof(EventsPublished), ("Run Tag", runTag));
-            EventsReceived = CreateCounter(metrics, nameof(EventsReceived), ("Run Tag", runTag));
-        }
-
         private static ICounter CreateCounter(IMetrics metrics, string counterName, params (string key, string value)[] tagPairs)
         {
             var tags = new MetricTags(tagPairs.Select(tp => tp.key).ToArray(), tagPairs.Select(tp => ValueOrDefault(tp.value)).ToArray());
@@ -116,7 +147,7 @@ namespace EGBench
             return metrics.Provider.Counter.Instance(new CounterOptions
             {
                 Name = counterName,
-                Context = "EGBench",
+                Context = Context,
                 MeasurementUnit = Unit.Requests,
                 ReportItemPercentages = false,
                 ReportSetItems = false,

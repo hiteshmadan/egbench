@@ -11,7 +11,7 @@ namespace EGBench
 {
     public static class EGBenchLogger
     {
-        private static string Timestamp => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+        private static string Timestamp => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.ff", CultureInfo.InvariantCulture);
 
         public static void WriteLine(string s, [CallerFilePath] string callerFilePath = default, [CallerMemberName] string callerMemberName = default, [CallerLineNumber] int callerLineNumber = 0)
         {
@@ -26,7 +26,7 @@ namespace EGBench
         private static string GetMessage(string s, string callerFilePath, string callerMemberName, int callerLineNumber)
         {
             string fileName = Path.GetFileNameWithoutExtension(callerFilePath);
-            string message = $"{Timestamp}:[{nameof(EGBenchLogger)}] - [{fileName}:{callerMemberName}()@line {callerLineNumber}] {s}";
+            string message = $"{Timestamp}:[{fileName}:{callerMemberName}@{callerLineNumber}] {s}";
             if (Debugger.IsAttached)
             {
                 Debug.WriteLine(message);
