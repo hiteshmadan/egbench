@@ -4,13 +4,13 @@ using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
+using System.Threading.Channels;
+using System.Threading.Tasks;
 using McMaster.Extensions.CommandLineUtils;
 
 namespace EGBench
 {
-#pragma warning disable CA1001 // Types that own disposable fields should be disposable
-    internal class PublishWorker
-#pragma warning restore CA1001 // Types that own disposable fields should be disposable
+    internal class PublishWorker : IDisposable
     {
         private readonly Uri uri;
         private readonly IPayloadCreator payloadCreator;
@@ -18,14 +18,18 @@ namespace EGBench
         private readonly IConsole console;
         private readonly Action<int, Exception> exit;
         private readonly HttpClient httpClient;
+        private readonly Channel<long> buffer;
+        private readonly SemaphoreSlim maxConcurrentRequests;
 
-        public PublishWorker(Uri uri, IPayloadCreator payloadCreator, string httpVersion, bool skipServerCertificateValidation, IConsole console, Action<int, Exception> exit)
+        public PublishWorker(CLI.PublisherCLI.StartPublishCommand startPublishCmd, IPayloadCreator payloadCreator, IConsole console, Action<int, Exception> exit)
         {
-            this.uri = uri;
+            this.uri = new Uri(startPublishCmd.Address);
             this.payloadCreator = payloadCreator;
-            this.httpVersion = new Version(httpVersion);
+            this.httpVersion = new Version(startPublishCmd.HttpVersion);
             this.console = console;
             this.exit = exit;
+            this.maxConcurrentRequests = new SemaphoreSlim(startPublishCmd.MaxConcurrentRequestsPerPublisher);
+            this.buffer = Channel.CreateBounded<long>(new BoundedChannelOptions(startPublishCmd.RequestsPerSecondPerPublisher * 10) { FullMode = BoundedChannelFullMode.DropWrite, SingleReader = true, SingleWriter = true, AllowSynchronousContinuations = false });
 
 #pragma warning disable CA2000 // Dispose objects before losing scope
             var httpHandler = new SocketsHttpHandler
@@ -45,19 +49,47 @@ namespace EGBench
                 MaxConnectionsPerServer = int.MaxValue // we manually control concurrency at the request level, instead of asking socketsHttpClient to do it at the connection level.
             };
 
-            if (skipServerCertificateValidation)
+            if (startPublishCmd.SkipServerCertificateValidation)
             {
                 httpHandler.SslOptions.RemoteCertificateValidationCallback = (a, b, c, d) => true;
             }
 
-            this.httpClient = new HttpClient(httpHandler, disposeHandler: true);
+            this.httpClient = new HttpClient(httpHandler, disposeHandler: true)
+            {
+                Timeout = Timeout.InfiniteTimeSpan
+            };
+
+            _ = Task.Run(this.PublishLoopAsync);
 #pragma warning restore CA2000 // Dispose objects before losing scope
         }
 
-        public async void PublishFireAndForget(object state)
+        public void Dispose()
+        {
+            this.httpClient?.Dispose();
+            this.maxConcurrentRequests?.Dispose();
+        }
+
+        public bool TryEnqueue(long iteration) => this.buffer.Writer.TryWrite(iteration);
+
+        private async Task PublishLoopAsync()
+        {
+            while (true)
+            {
+                while (this.buffer.Reader.TryRead(out long iteration))
+                {
+                    await this.maxConcurrentRequests.WaitAsync();
+                    ThreadPool.UnsafeQueueUserWorkItem(this.PublishFireAndForget, iteration, true);
+                }
+
+                await this.buffer.Reader.WaitToReadAsync();
+            }
+        }
+
+        private async void PublishFireAndForget(long iteration)
         {
             try
             {
+                // TODO: Use publishWorkerId+iteration to seed the event.id parameter.
                 using (HttpContent content = this.payloadCreator.CreateHttpContent())
                 using (var request = new HttpRequestMessage(HttpMethod.Post, this.uri) { Content = content, Version = this.httpVersion })
                 {
@@ -80,6 +112,10 @@ namespace EGBench
 
                 // unhandled exceptions in async void methods can bring down the process, swallow all exceptions.
                 // this.exit(1, ex);
+            }
+            finally
+            {
+                this.maxConcurrentRequests.Release();
             }
         }
     }
