@@ -4,6 +4,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -47,16 +48,53 @@ namespace EGBench
                 [Option("-t|--runtime-in-minutes", "Time after which the subscriber auto-shuts down, defaults to 120 minutes. Set to 0 to never autoshutdown.", CommandOptionType.SingleValue)]
                 public ushort RuntimeInMinutes { get; set; } = 120;
 
-                [Option("-m|--meanDelayMs", "Subscriber delays (in milliseconds) are generated via a normal/gaussian distribution, specify the mean of the distribution here.", CommandOptionType.SingleValue)]
+                [Option("-m|--meanDelayMs", "Fixed subscriber delay (in milliseconds). If stdDevDelayInMs is specified, delays are generated via a normal/gaussian distribution, Specify the mean of the distribution here.", CommandOptionType.SingleValue)]
                 public uint MeanDelayInMs { get; set; } = 0;
 
-                [Option("-s|--stdDevDelayMs", "Subscriber delays (in milliseconds) are generated via a normal/gaussian distribution, specify the standard deviation of the distribution here.", CommandOptionType.SingleValue)]
+                [Option("-s|--stdDevDelayMs", "If non-zero, Subscriber delays (in milliseconds) get generated via a normal/gaussian distribution. Specify the standard deviation of the distribution here.", CommandOptionType.SingleValue)]
                 public uint StdDevDelayInMs { get; set; } = 0;
+
+                [Option("-r|--return-code", "HTTP Status code to be returned, formatted as (%,HttpCode). ... -r \"10,400\" -r \"90:200\" would result in 10% HTTP 400 responses and 90% HTTP 200. All entries must sum to 100%. Valid separators: , : ; | _ <space>", CommandOptionType.MultipleValue)]
+                public string[] ReturnStatusCodes { get; set; } = new[] { "100,200" };
+
+                internal (int percent, HttpStatusCode result)[] StatusCodeMap { get; set; }
 
                 public async Task<int> OnExecuteAsync(CommandLineApplication app, IConsole console)
                 {
                     PropertyInfo[] options = this.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.GetCustomAttribute<OptionAttribute>() != null).ToArray();
                     EGBenchLogger.WriteLine(console, $"Subscriber arguments (merged from cmdline and code defaults):\n{string.Join("\n", options.Select(o => $"{o.Name}={o.GetValue(this)}"))}");
+
+                    this.StatusCodeMap = this.ReturnStatusCodes
+                        .Select((s, i) =>
+                        {
+                            string s2 = s.Trim();
+                            string[] ss = s2.Split(',', ';', ' ', '|', '_', ':');
+                            string error = string.Empty;
+                            if (ss.Length != 2)
+                            {
+                                error = $"return-code at index {i} with string value of '{s}' is invalid. Valid examples: -r \"10,400\" -r \"90:200\"";
+                            }
+                            else if (!int.TryParse(ss[0].Trim(), out int percent))
+                            {
+                                error = $"return-code at index {i} with string value of '{s}' has a percentage value that can't be parsed to an integer.";
+                            }
+                            else if (!Enum.TryParse<HttpStatusCode>(ss[1].Trim(), out HttpStatusCode result))
+                            {
+                                error = $"return-code at index {i} with string value of '{s}' has a http status code value that can't be parsed to the HttpStatusCode type.";
+                            }
+                            else
+                            {
+                                return (percent, result);
+                            }
+
+                            throw new InvalidOperationException(error);
+                        })
+                        .ToArray();
+
+                    if (this.StatusCodeMap.Sum(kvp => kvp.percent) != 100)
+                    {
+                        throw new InvalidOperationException($"Sum of all percentages should be 100, was found to be {this.StatusCodeMap.Sum(kvp => kvp.percent)}. Parsed percentages={string.Join(',', this.StatusCodeMap.Select(kvp => kvp.percent))}");
+                    }
 
                     Metric.InitializeSubscriber(this.Root);
 

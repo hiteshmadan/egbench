@@ -17,10 +17,19 @@ namespace EGBench
     public class ListenerStartup : IStartup
     {
         private readonly int delayInMs;
+        private readonly HttpStatusCode[] statusCodeMap;
 
         public ListenerStartup(StartListenerCommand startListenerCommand)
         {
             this.delayInMs = (int)Math.Max(0, startListenerCommand.MeanDelayInMs);
+            this.statusCodeMap = new HttpStatusCode[100];
+
+            Span<HttpStatusCode> span = this.statusCodeMap.AsSpan();
+            foreach ((int percent, HttpStatusCode code) in startListenerCommand.StatusCodeMap)
+            {
+                span.Slice(0, percent).Fill(code);
+                span = span.Slice(percent);
+            }
         }
 
         public IServiceProvider ConfigureServices(IServiceCollection services) => services.BuildServiceProvider();
@@ -47,7 +56,7 @@ namespace EGBench
 
                     Metric.SuccessRequestsDelivered.Increment();
                     Metric.SuccessDeliveryLatencyMs.Update(receiveDuration.ElapsedMilliseconds);
-                    context.Response.StatusCode = (int)HttpStatusCode.OK;
+                    context.Response.StatusCode = (int)this.statusCodeMap[ThreadSafeRandom.Next(0, 100)];
                 }
             }
             catch

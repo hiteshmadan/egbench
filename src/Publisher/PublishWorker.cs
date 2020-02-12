@@ -101,7 +101,9 @@ namespace EGBench
                         {
                             Metric.ErrorPublishLatencyMs.Update(sendDuration.ElapsedMilliseconds);
                             Metric.ErrorRequestsPublished.Increment();
-                            EGBenchLogger.WriteLine(this.console, $"HTTP {(int)response.StatusCode} {response.StatusCode} - {response.ReasonPhrase}");
+
+                            // TODO: In case of high failure rate these console writes will slow down the process.
+                            EGBenchLogger.WriteLine(this.console, $"HTTP {(int)response.StatusCode} - {response.ReasonPhrase}");
                         }
                         else
                         {
