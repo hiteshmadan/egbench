@@ -58,7 +58,7 @@ namespace EGBench
                     PropertyInfo[] options = this.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.GetCustomAttribute<OptionAttribute>() != null).ToArray();
                     EGBenchLogger.WriteLine(console, $"Subscriber arguments (merged from cmdline and code defaults):\n{string.Join("\n", options.Select(o => $"{o.Name}={o.GetValue(this)}"))}");
 
-                    Metric.Initialize(this.Root);
+                    Metric.InitializeSubscriber(this.Root);
 
                     this.host = new WebHostBuilder()
                         .UseContentRoot(Directory.GetCurrentDirectory())

@@ -29,19 +29,35 @@ namespace EGBench
 
         private async Task RequestHandlerAsync(HttpContext context)
         {
+            Timestamp receiveDuration = Timestamp.Now;
             if (this.delayInMs > 0)
             {
                 await Task.Delay(this.delayInMs);
             }
 
-            using (IMemoryOwner<byte> bytes = await context.Request.Body.CopyToPooledMemoryAsync(CancellationToken.None))
+            try
             {
-                ParseArray(bytes);
+                using (IMemoryOwner<byte> bytes = await context.Request.Body.CopyToPooledMemoryAsync(CancellationToken.None))
+                {
+                    int numEvents = ParseArray(bytes);
+                    if (numEvents > 0)
+                    {
+                        Metric.SuccessEventsDelivered.Increment(numEvents);
+                    }
+
+                    Metric.SuccessRequestsDelivered.Increment();
+                    Metric.SuccessDeliveryLatencyMs.Update(receiveDuration.ElapsedMilliseconds);
+                    context.Response.StatusCode = (int)HttpStatusCode.OK;
+                }
+            }
+            catch
+            {
+                Metric.ErrorRequestsDelivered.Increment();
+                Metric.ErrorDeliveryLatencyMs.Update(receiveDuration.ElapsedMilliseconds);
+                throw;
             }
 
-            context.Response.StatusCode = (int)HttpStatusCode.OK;
-
-            static void ParseArray(IMemoryOwner<byte> bytes)
+            static int ParseArray(IMemoryOwner<byte> bytes)
             {
                 var reader = new JsonReader<byte>(bytes.Memory.Span);
                 int count = 0;
@@ -51,10 +67,7 @@ namespace EGBench
                     reader.SkipNextUtf8Segment();
                 }
 
-                if (count > 0)
-                {
-                    Metric.EventsReceived.Increment(count);
-                }
+                return count;
             }
         }
     }

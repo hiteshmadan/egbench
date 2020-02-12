@@ -43,7 +43,7 @@ namespace EGBench
 
                 ConnectTimeout = Timeout.InfiniteTimeSpan, // do NOT set this up manually, the passed in cancellation token when making the first request gets honored as connect timeout too. See comment below near new HttpClient().
                 Credentials = null,
-                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(30),
                 PooledConnectionLifetime = Timeout.InfiniteTimeSpan,
                 PreAuthenticate = false,
                 MaxConnectionsPerServer = int.MaxValue // we manually control concurrency at the request level, instead of asking socketsHttpClient to do it at the connection level.
@@ -87,28 +87,36 @@ namespace EGBench
 
         private async void PublishFireAndForget(long iteration)
         {
+            Timestamp sendDuration = Timestamp.Now;
             try
             {
                 // TODO: Use publishWorkerId+iteration to seed the event.id parameter.
                 using (HttpContent content = this.payloadCreator.CreateHttpContent())
                 using (var request = new HttpRequestMessage(HttpMethod.Post, this.uri) { Content = content, Version = this.httpVersion })
                 {
-                    using (HttpResponseMessage response = await this.httpClient.SendAsync(request))
+                    sendDuration = Timestamp.Now;
+                    using (HttpResponseMessage response = await this.httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead))
                     {
                         if (response.StatusCode != HttpStatusCode.OK)
                         {
+                            Metric.ErrorPublishLatencyMs.Update(sendDuration.ElapsedMilliseconds);
+                            Metric.ErrorRequestsPublished.Increment();
                             EGBenchLogger.WriteLine(this.console, $"HTTP {(int)response.StatusCode} {response.StatusCode} - {response.ReasonPhrase}");
                         }
                         else
                         {
-                            Metric.EventsPublished.Increment(this.payloadCreator.EventsPerRequest);
+                            Metric.SuccessPublishLatencyMs.Update(sendDuration.ElapsedMilliseconds);
+                            Metric.SuccessEventsPublished.Increment(this.payloadCreator.EventsPerRequest);
+                            Metric.SuccessRequestsPublished.Increment();
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                EGBenchLogger.WriteLine(this.console, $"{ex.Message}");
+                Metric.ErrorPublishLatencyMs.Update(sendDuration.ElapsedMilliseconds);
+                Metric.ErrorRequestsPublished.Increment();
+                EGBenchLogger.WriteLine(this.console, ex.Message);
 
                 // unhandled exceptions in async void methods can bring down the process, swallow all exceptions.
                 // this.exit(1, ex);

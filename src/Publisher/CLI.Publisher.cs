@@ -94,7 +94,7 @@ namespace EGBench
                         _ => throw new NotImplementedException($"Unknown topic schema {this.TopicSchema}")
                     };
 
-                    Metric.Initialize(this.Root);
+                    Metric.InitializePublisher(this.Root);
                     var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
                     Action<int, Exception> exit = this.CreateExitHandler(tcs, console, this.RuntimeInMinutes);
 
