@@ -1,0 +1,47 @@
+name: Docker Image CI
+
+on: [push]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      name: Checkout sources
+      with:
+        fetch-depth: 0
+      
+    - uses: actions/setup-dotnet@v1.4.0
+      name: Install .net core 3.1.100
+      with:
+        dotnet-version: '3.1.100'
+
+    - uses: AArnott/nbgv@v0.3
+      name: Install Nerdbank.GitVersioning
+      id: nbgv
+      with:
+        setCommonVars: true
+        setAllVars: true
+
+    - run: nbgv get-version -f json
+      name: print versioning info
+
+    - run: docker login -u hiteshmadan -p '${{ secrets.GITHUB_TOKEN }}' docker.pkg.github.com
+      name: login to github docker registry
+
+#    - uses: azure/docker-login@v1
+#      with:
+#        login-server: docker.pkg.github.com
+#        username: hiteshmadan
+#        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - run: dotnet publish -c Release
+
+    - run: docker build . --file docker/dockerfile --tag 'docker.pkg.github.com/hiteshmadan/egbench/egbench:${{ steps.nbgv.outputs.NugetPackageVersion }}'
+      name: build docker image
+      
+    - run: docker push 'docker.pkg.github.com/hiteshmadan/egbench/egbench:${{ steps.nbgv.outputs.NugetPackageVersion }}'
+      name: push docker image
