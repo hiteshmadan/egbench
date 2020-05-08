@@ -5,9 +5,8 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using McMaster.Extensions.CommandLineUtils;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace EGBench
 {
@@ -66,7 +65,6 @@ namespace EGBench
             }
 
             this.bytes = new ReadOnlyMemory<byte>(byteArray);
-
             this.Validate(console);
         }
 
@@ -92,8 +90,8 @@ namespace EGBench
                 serialized = Encoding.UTF8.GetString(bytes);
             }
 
-            _ = JsonConvert.DeserializeObject<JArray>(serialized);
             EGBenchLogger.WriteLine(console, $"Sample request payload that'll get sent out. Size={bytesLength} Actual payload=\n\n{serialized}");
+            _ = JsonSerializer.Deserialize<object[]>(serialized);
         }
     }
 }

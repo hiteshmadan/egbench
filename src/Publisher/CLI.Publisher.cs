@@ -4,8 +4,6 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using McMaster.Extensions.CommandLineUtils;
 
@@ -38,11 +36,11 @@ namespace EGBench
                 [Required]
                 public string Address { get; set; }
 
-                [Option("-n|--topic-name", "REQUIRED. String that should be used for stamping eventgrid event envelope's Topic field.", CommandOptionType.SingleValue)]
+                [Option("-n|--topic-name", "REQUIRED. String that should be used for stamping eventgrid event envelope's Topic field or cloud event envelope's source field.", CommandOptionType.SingleValue)]
                 [Required]
                 public string TopicName { get; set; }
 
-                [Option("-s|--topic-schema", "Defaults to EventGrid. Possible values: EventGrid / CloudEventV10 / Custom. Specify the -d|--data-payload property for Custom topic schema.", CommandOptionType.SingleValue)]
+                [Option("-s|--topic-schema", "Defaults to EventGrid. Possible values: EventGrid / CloudEvent10 / Custom. Specify the -d|--data-payload property for Custom topic schema.", CommandOptionType.SingleValue)]
                 public string TopicSchema { get; set; } = "EventGrid";
 
                 [Option("-d|--data-payload", "Specify the data payload when -s|--topic-schema=Custom. Either give inline json or a file path.", CommandOptionType.SingleValue)]
@@ -69,13 +67,13 @@ namespace EGBench
                 [Option("-v|--protocol-version", "The protocol version to use, defaults to 1.1.", CommandOptionType.SingleValue)]
                 public string HttpVersion { get; set; } = "1.1";
 
-                [Option("|--skip-ssl-validation", "Skip SSL Server Certificate validation, defaults to false.", CommandOptionType.SingleValue)]
+                [Option("|--skip-ssl-validation", "Skip SSL Server Certificate validation, defaults to false.", CommandOptionType.NoValue)]
                 public bool SkipServerCertificateValidation { get; set; } = false;
 
                 public async Task<int> OnExecuteAsync(CommandLineApplication app, IConsole console)
                 {
-                    PropertyInfo[] options = this.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.GetCustomAttribute<OptionAttribute>() != null).ToArray();
-                    EGBenchLogger.WriteLine(console, $"Publisher arguments (merged from cmdline and code defaults):\n{string.Join("\n", options.Select(o => $"{o.Name}={o.GetValue(this)}"))}");
+                    this.LogOptionValues(console);
+                    this.Root.LogOptionValues(console);
 
                     if (this.ConcurrentPublishersCount < 1)
                     {
@@ -90,8 +88,9 @@ namespace EGBench
                     IPayloadCreator payloadCreator = this.TopicSchema.ToUpperInvariant() switch
                     {
                         "EVENTGRID" => new EventGridPayloadCreator(this.TopicName, this.EventSizeInBytes, this.EventsPerRequest, console),
+                        "CLOUDEVENT10" => new CloudEvent10PayloadCreator(this.TopicName, this.EventSizeInBytes, this.EventsPerRequest, console),
                         "CUSTOM" => new CustomPayloadCreator(this.DataPayload, this.EventsPerRequest, console),
-                        _ => throw new NotImplementedException($"Unknown topic schema {this.TopicSchema}")
+                        _ => throw new NotImplementedException($"Unknown topic schema {this.TopicSchema}. Allowed schemas = EventGrid,CloudEvent10,Custom")
                     };
 
                     Metric.InitializePublisher(this.Root);
@@ -126,7 +125,7 @@ namespace EGBench
                         int lagMs = (int)Math.Ceiling((Timestamp.Now - expectedTimestampNow).TotalMilliseconds);
                         if (lagMs < timerIntervalMs)
                         {
-                            Thread.Sleep(timerIntervalMs - lagMs);
+                            await Task.Delay(timerIntervalMs - lagMs);
                         }
                         else
                         {
@@ -139,6 +138,16 @@ namespace EGBench
 
                 private static Action<int, Exception> CreateExitHandler(TaskCompletionSource<int> tcs, IConsole console, int runtimeInMinutes)
                 {
+                    _ = Task.Delay(TimeSpan.FromMinutes(runtimeInMinutes)).ContinueWith(
+                        t =>
+                        {
+                            EGBenchLogger.WriteLine(console, $"--runtime-in-minutes ({runtimeInMinutes}) Minutes have passed, stopping the process.");
+                            tcs.TrySetResult(0);
+                        },
+                        TaskScheduler.Default);
+
+                    return ExitHandler;
+
                     void ExitHandler(int returnCode, Exception ex)
                     {
                         EGBenchLogger.WriteLine(console, $"{nameof(CreateExitHandler)} was invoked at stacktrace:\n{new StackTrace(true).ToString()}");
@@ -152,16 +161,6 @@ namespace EGBench
                             tcs.TrySetException(ex);
                         }
                     }
-
-                    _ = Task.Delay(TimeSpan.FromMinutes(runtimeInMinutes)).ContinueWith(
-                        t =>
-                        {
-                            EGBenchLogger.WriteLine(console, $"--runtime-in-minutes ({runtimeInMinutes}) Minutes have passed, stopping the process.");
-                            tcs.TrySetResult(0);
-                        },
-                        TaskScheduler.Default);
-
-                    return ExitHandler;
                 }
             }
         }

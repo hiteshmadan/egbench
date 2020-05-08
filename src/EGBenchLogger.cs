@@ -11,7 +11,7 @@ namespace EGBench
 {
     public static class EGBenchLogger
     {
-        private static string Timestamp => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.ff", CultureInfo.InvariantCulture);
+        private static string Timestamp => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fffK", CultureInfo.InvariantCulture);
 
         public static void WriteLine(string s, [CallerFilePath] string callerFilePath = default, [CallerMemberName] string callerMemberName = default, [CallerLineNumber] int callerLineNumber = 0)
         {

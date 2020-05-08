@@ -154,6 +154,9 @@ dotnet_diagnostic.SA0001.severity = none
 # SA1512: Single-line comments should not be followed by blank line
 dotnet_diagnostic.SA1512.severity = none
 
+# SA1515: Single-line comments should be preceded by blank line
+dotnet_diagnostic.SA1515.severity = none
+
 # CA5359: Do Not Disable Certificate Validation
 dotnet_diagnostic.CA5359.severity = none
 
@@ -180,6 +183,18 @@ dotnet_diagnostic.CA1816.severity = none
 
 # CA1819: Properties should not return arrays
 dotnet_diagnostic.CA1819.severity = none
+
+# CA2002: Do not lock on objects with weak identity
+dotnet_diagnostic.CA2002.severity = silent
+
+#CA1822: Mark members as static
+dotnet_diagnostic.CA1822.severity = suggestion
+
+#CA1812: Remove unused classes
+dotnet_diagnostic.CA1812.severity = suggestion
+
+# IDE0051: Remove unused private members
+dotnet_diagnostic.IDE0051.severity = suggestion
 
 [*.vb] 
 # Modifier preferences 

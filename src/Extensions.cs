@@ -3,13 +3,38 @@
 using System;
 using System.Buffers;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using McMaster.Extensions.CommandLineUtils;
 
 namespace EGBench
 {
     internal static class Extensions
     {
+        public static void LogOptionValues(this object @this, IConsole console)
+        {
+            PropertyInfo[] options = @this.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.GetCustomAttribute<OptionAttribute>() != null).ToArray();
+            EGBenchLogger.WriteLine(console, $"Commandline arguments (merged from cmdline and code defaults):\n{string.Join("\n", options.Select(o => $"{o.Name}={ToString(o.GetValue(@this))}"))}");
+
+            static string ToString(object value)
+            {
+                if (value is string[] typed)
+                {
+                    return string.Join(" ", typed);
+                }
+                else if (value is null)
+                {
+                    return "NULL";
+                }
+                else
+                {
+                    return value.ToString();
+                }
+            }
+        }
+
         public static void GrowRented<T>(this MemoryPool<T> pool, ref IMemoryOwner<T> rented)
         {
             IMemoryOwner<T> toReturn = rented;

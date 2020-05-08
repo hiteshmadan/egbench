@@ -6,6 +6,8 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using App.Metrics.Counter;
+using App.Metrics.Histogram;
 using McMaster.Extensions.CommandLineUtils;
 
 namespace EGBench
@@ -71,6 +73,16 @@ namespace EGBench
 
         public bool TryEnqueue(long iteration) => this.buffer.Writer.TryWrite(iteration);
 
+        private static (ICounter eventsMetric, ICounter requestsMetric, IHistogram requestLatencyMetric) SelectMetrics(int resultStatusCode)
+        {
+            return ((int)(resultStatusCode / 100)) switch
+            {
+                int _ when resultStatusCode < 400 => (Metric.PublishEventsSuccess, Metric.PublishRequestsSuccess, Metric.PublishRequestLatencyMsSuccess),
+                4 => (Metric.PublishEventsUserError, Metric.PublishRequestsUserError, Metric.PublishRequestLatencyMsUserError),
+                _ => (Metric.PublishEventsSystemError, Metric.PublishRequestsSystemError, Metric.PublishRequestLatencyMsSystemError),
+            };
+        }
+
         private async Task PublishLoopAsync()
         {
             while (true)
@@ -97,27 +109,16 @@ namespace EGBench
                     sendDuration = Timestamp.Now;
                     using (HttpResponseMessage response = await this.httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead))
                     {
-                        if (response.StatusCode != HttpStatusCode.OK)
-                        {
-                            Metric.ErrorPublishLatencyMs.Update(sendDuration.ElapsedMilliseconds);
-                            Metric.ErrorRequestsPublished.Increment();
-
-                            // TODO: In case of high failure rate these console writes will slow down the process.
-                            EGBenchLogger.WriteLine(this.console, $"HTTP {(int)response.StatusCode} - {response.ReasonPhrase}");
-                        }
-                        else
-                        {
-                            Metric.SuccessPublishLatencyMs.Update(sendDuration.ElapsedMilliseconds);
-                            Metric.SuccessEventsPublished.Increment(this.payloadCreator.EventsPerRequest);
-                            Metric.SuccessRequestsPublished.Increment();
-                        }
+                        (ICounter eventsMetric, ICounter requestsMetric, IHistogram requestLatencyMetric) = SelectMetrics((int)response.StatusCode);
+                        requestLatencyMetric.Update(sendDuration.ElapsedMilliseconds);
+                        eventsMetric.Increment(this.payloadCreator.EventsPerRequest);
+                        requestsMetric.Increment();
                     }
                 }
             }
             catch (Exception ex)
             {
-                Metric.ErrorPublishLatencyMs.Update(sendDuration.ElapsedMilliseconds);
-                Metric.ErrorRequestsPublished.Increment();
+                Metric.PublishRequestsFailed.Increment();
                 EGBenchLogger.WriteLine(this.console, ex.Message);
 
                 // unhandled exceptions in async void methods can bring down the process, swallow all exceptions.

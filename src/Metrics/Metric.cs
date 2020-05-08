@@ -8,208 +8,203 @@ using System.Threading.Tasks;
 using App.Metrics;
 using App.Metrics.Counter;
 using App.Metrics.Filtering;
-using App.Metrics.Formatters.InfluxDB;
+using App.Metrics.Formatters.Ascii;
 using App.Metrics.Histogram;
-using App.Metrics.Reporting.Socket.Client;
 using App.Metrics.ReservoirSampling;
 
 namespace EGBench
 {
     public static class Metric
     {
-        private const string Context = "EGBench";
-        private const string RunTagKey = "RunTag";
-        private const string Status = "Status";
-        private const string Success = "Success";
-        private const string Error = "Error";
+        private const string Status = nameof(Status);
+        private const string Success = nameof(Success);
+        private const string UserError = nameof(UserError);
+        private const string SystemError = nameof(SystemError);
 
         private static readonly Unit UnitMs = Unit.Custom("ms");
-        private static IMetrics metrics;
-        private static string runTag;
+        private static readonly Unit UnitCount = Unit.Custom("count");
+        private static IMetricsRoot metricsRoot;
 
-        public static ICounter SuccessEventsPublished { get; private set; }
+        public static ICounter PublishEventsSuccess { get; private set; }
 
-        public static ICounter SuccessRequestsPublished { get; private set; }
+        public static ICounter PublishRequestsSuccess { get; private set; }
 
-        public static ICounter ErrorRequestsPublished { get; private set; }
+        public static IHistogram PublishRequestLatencyMsSuccess { get; private set; }
 
-        public static IHistogram SuccessPublishLatencyMs { get; private set; }
+        public static ICounter PublishEventsUserError { get; private set; }
 
-        public static IHistogram ErrorPublishLatencyMs { get; private set; }
+        public static ICounter PublishRequestsUserError { get; private set; }
 
-        public static ICounter SuccessEventsDelivered { get; private set; }
+        public static IHistogram PublishRequestLatencyMsUserError { get; private set; }
 
-        public static ICounter SuccessRequestsDelivered { get; private set; }
+        public static ICounter PublishEventsSystemError { get; private set; }
 
-        public static ICounter ErrorRequestsDelivered { get; private set; }
+        public static ICounter PublishRequestsSystemError { get; private set; }
 
-        public static IHistogram SuccessDeliveryLatencyMs { get; private set; }
+        public static IHistogram PublishRequestLatencyMsSystemError { get; private set; }
 
-        public static IHistogram ErrorDeliveryLatencyMs { get; private set; }
+        public static ICounter PublishRequestsFailed { get; private set; }
+
+        public static IHistogram SubscribeE2ELatencyMs { get; private set; }
+
+        public static ICounter SubscribeEventsSuccess { get; private set; }
+
+        public static ICounter SubscribeRequestsSuccess { get; private set; }
+
+        public static IHistogram SubscribeRequestLatencyMsSuccess { get; private set; }
+
+        public static ICounter SubscribeEventsUserError { get; private set; }
+
+        public static ICounter SubscribeRequestsUserError { get; private set; }
+
+        public static IHistogram SubscribeRequestLatencyMsUserError { get; private set; }
+
+        public static ICounter SubscribeEventsSystemError { get; private set; }
+
+        public static ICounter SubscribeRequestsSystemError { get; private set; }
+
+        public static IHistogram SubscribeRequestLatencyMsSystemError { get; private set; }
 
         public static void InitializePublisher(CLI root)
         {
-            if (metrics != null)
+            if (metricsRoot != null)
             {
                 return;
             }
 
-            (metrics, runTag) = Helper.Initialize(root);
-            SuccessEventsPublished = Helper.CreateCounter(metrics, runTag, "Events Published");
-            SuccessRequestsPublished = Helper.CreateCounter(metrics, runTag, "Requests Published", (Status, Success));
-            SuccessPublishLatencyMs = Helper.CreateHistogram(metrics, runTag, "Request Publish Latency ms", (Status, Success));
+            Initialize(root);
+            PublishEventsSuccess = CreateCounter("Publish-Events", UnitCount, (Status, Success));
+            PublishRequestsSuccess = CreateCounter("Publish-Requests", UnitCount, (Status, Success));
+            PublishRequestLatencyMsSuccess = CreateHistogram("Publish-Request Latency (ms)", UnitMs, (Status, Success));
 
-            ErrorRequestsPublished = Helper.CreateCounter(metrics, runTag, "Requests Published", (Status, Error));
-            ErrorPublishLatencyMs = Helper.CreateHistogram(metrics, runTag, "Request Publish Latency ms", (Status, Error));
+            PublishEventsUserError = CreateCounter("Publish-Events", UnitCount, (Status, UserError));
+            PublishRequestsUserError = CreateCounter("Publish-Requests", UnitCount, (Status, UserError));
+            PublishRequestLatencyMsUserError = CreateHistogram("Publish-Request Latency (ms)", UnitMs, (Status, UserError));
+
+            PublishEventsSystemError = CreateCounter("Publish-Events", UnitCount, (Status, SystemError));
+            PublishRequestsSystemError = CreateCounter("Publish-Requests", UnitCount, (Status, SystemError));
+            PublishRequestLatencyMsSystemError = CreateHistogram("Publish-Request Latency (ms)", UnitMs, (Status, SystemError));
+
+            PublishRequestsFailed = CreateCounter("Publish-Requests Failed", UnitCount);
         }
 
         public static void InitializeSubscriber(CLI root)
         {
-            if (metrics != null)
+            if (metricsRoot != null)
             {
                 return;
             }
 
-            (metrics, runTag) = Helper.Initialize(root);
-            SuccessEventsDelivered = Helper.CreateCounter(metrics, runTag, "Events Delivered");
-            SuccessRequestsDelivered = Helper.CreateCounter(metrics, runTag, "Requests Delivered", (Status, Success));
-            SuccessDeliveryLatencyMs = Helper.CreateHistogram(metrics, runTag, "Request Delivery Latency ms", (Status, Success));
+            Initialize(root);
+            SubscribeE2ELatencyMs = CreateHistogram("Subscribe-E2E Latency (ms)", UnitMs);
 
-            ErrorRequestsDelivered = Helper.CreateCounter(metrics, runTag, "Requests Delivered", (Status, Error));
-            ErrorDeliveryLatencyMs = Helper.CreateHistogram(metrics, runTag, "Request Delivery Latency ms", (Status, Error));
+            SubscribeEventsSuccess = CreateCounter("Subscribe-Events", UnitCount, (Status, Success));
+            SubscribeRequestsSuccess = CreateCounter("Subscribe-Requests", UnitCount, (Status, Success));
+            SubscribeRequestLatencyMsSuccess = CreateHistogram("Subscribe-Request Latency (ms)", UnitMs, (Status, Success));
+
+            SubscribeEventsUserError = CreateCounter("Subscribe-Events", UnitCount, (Status, UserError));
+            SubscribeRequestsUserError = CreateCounter("Subscribe-Requests", UnitCount, (Status, UserError));
+            SubscribeRequestLatencyMsUserError = CreateHistogram("Subscribe-Request Latency (ms)", UnitMs, (Status, UserError));
+
+            SubscribeEventsSystemError = CreateCounter("Subscribe-Events", UnitCount, (Status, SystemError));
+            SubscribeRequestsSystemError = CreateCounter("Subscribe-Requests", UnitCount, (Status, SystemError));
+            SubscribeRequestLatencyMsSystemError = CreateHistogram("Subscribe-Request Latency (ms)", UnitMs, (Status, SystemError));
         }
 
-        private static class Helper
+        private static void Initialize(CLI root)
         {
-            public static (IMetricsRoot m, string r) Initialize(CLI root)
+            if (root == null)
             {
-                if (root == null)
+                throw new NullReferenceException("root should not be null.");
+            }
+
+            string context = root.RunTag ?? nameof(EGBench);
+
+            IMetricsBuilder builder = AppMetrics.CreateDefaultBuilder()
+                // .Filter.With(new NonZeroMetricsFilter())
+                .Filter.With(new MetricsFilter().WhereContext(context))
+                .Configuration.Configure(options =>
                 {
-                    throw new NullReferenceException("root should not be null.");
-                }
+                    options.DefaultContextLabel = context;
+                    options.GlobalTags.Clear();
+                    options.Enabled = true;
+                    options.ReportingEnabled = true;
+                });
 
-                (string telegrafAddress, int? telegrafPort)? telegrafConfig = null;
-                if (root.TelegrafAddress.HasValue && root.TelegrafPort.HasValue)
+            if (root.AppInsightsKey.HasValue)
+            {
+                EGBenchLogger.WriteLine($"Reporting metrics to application insights with instrumentation key={root.AppInsightsKey.Value}");
+                builder.Report.ToApplicationInsights(root.AppInsightsKey.Value);
+            }
+            else
+            {
+                EGBenchLogger.WriteLine("Reporting metrics to console since --app-insights-key was not specified.");
+                builder.Report.ToConsole(options =>
                 {
-                    telegrafConfig = (root.TelegrafAddress.Value, root.TelegrafPort.Value);
-                }
+                    options.MetricsOutputFormatter = new MetricsTextOutputFormatter();
+                });
+            }
 
-                string reporterType = telegrafConfig.HasValue ? "TELEGRAF" : "CONSOLE";
+            metricsRoot = builder.Build();
 
-                var builder = new MetricsBuilder();
-                var outputFormatter = new MetricsInfluxDbLineProtocolOutputFormatter();
+            _ = Task.Run(() => ReportingLoop(metricsRoot, root.MetricsIntervalSeconds));
 
-                switch (reporterType.ToUpperInvariant())
+            static async Task ReportingLoop(IMetricsRoot @metrics, int metricsIntervalSeconds)
+            {
+                while (true)
                 {
-                    case "TELEGRAF":
-                        if (string.IsNullOrEmpty(telegrafConfig.Value.telegrafAddress))
-                        {
-                            throw new InvalidOperationException("telegrafAddress");
-                        }
+                    await Task.Delay(metricsIntervalSeconds * 1000);
 
-                        if (telegrafConfig.Value.telegrafPort == null)
-                        {
-                            throw new InvalidOperationException("telegrafPort");
-                        }
-
-                        builder.Report.OverUdp(options =>
-                        {
-                            options.MetricsOutputFormatter = outputFormatter;
-                            options.Filter = new MetricsFilter().WhereContext(Context);
-                            options.SocketSettings.Address = telegrafConfig.Value.telegrafAddress;
-                            options.SocketSettings.Port = telegrafConfig.Value.telegrafPort.Value;
-                            options.SocketPolicy = new SocketPolicy
-                            {
-                                FailuresBeforeBackoff = 3,
-                                Timeout = TimeSpan.FromSeconds(10),
-                                BackoffPeriod = TimeSpan.FromSeconds(20),
-                            };
-                        });
-                        break;
-
-                    case "CONSOLE":
-                    default:
-                        builder.Report.ToConsole(options =>
-                        {
-                            options.MetricsOutputFormatter = outputFormatter;
-                            options.Filter = new MetricsFilter().WhereContext(Context);
-                        });
-                        break;
-                }
-
-                IMetricsRoot metricsRoot = builder.Build();
-                _ = Task.Run(() => ReportingLoop(metricsRoot, root.MetricsIntervalSeconds));
-                return (metricsRoot, root.RunTag);
-
-                static async Task ReportingLoop(IMetricsRoot @metrics, int metricsIntervalSeconds)
-                {
-                    while (true)
+                    try
                     {
-                        await Task.Delay(metricsIntervalSeconds * 1000);
-
-                        try
-                        {
-                            await Task.WhenAll(@metrics.ReportRunner.RunAllAsync(CancellationToken.None));
-                        }
-                        catch (Exception)
-                        {
-                            // TODO: Log exception somewhere?
-                        }
+                        await Task.WhenAll(@metrics.ReportRunner.RunAllAsync(CancellationToken.None));
+                    }
+                    catch (Exception)
+                    {
+                        // TODO: Log exception somewhere?
                     }
                 }
             }
-
-            public static ICounter CreateCounter(IMetrics metrics, string runTag, string counterName, params (string key, string value)[] tagPairs)
-            {
-                (string key, string value)[] mergedTagPairs =
-                    new[] { (RunTagKey, runTag) }
-                    .Concat(tagPairs)
-                    .ToArray();
-
-                var tags = new MetricTags(mergedTagPairs.Select(tp => tp.key).ToArray(), mergedTagPairs.Select(tp => ValueOrDefault(tp.value)).ToArray());
-
-                return metrics.Provider.Counter.Instance(new CounterOptions
-                {
-                    Name = counterName,
-                    Context = Context,
-                    MeasurementUnit = Unit.Requests,
-                    ReportItemPercentages = false,
-                    ReportSetItems = false,
-                    ResetOnReporting = true,
-                    Tags = tags,
-                });
-            }
-
-            public static IHistogram CreateHistogram(IMetrics metrics, string runTag, string counterName, params (string key, string value)[] tagPairs)
-            {
-                (string key, string value)[] mergedTagPairs =
-                    new[] { (RunTagKey, runTag) }
-                    .Concat(tagPairs)
-                    .ToArray();
-
-                var tags = new MetricTags(mergedTagPairs.Select(tp => tp.key).ToArray(), mergedTagPairs.Select(tp => ValueOrDefault(tp.value)).ToArray());
-
-                return metrics.Provider.Histogram.Instance(new HistogramOptions
-                {
-                    Name = counterName,
-                    Context = Context,
-                    MeasurementUnit = UnitMs,
-                    Reservoir = CreateReservoir,
-                    Tags = tags
-                });
-            }
-
-            private static string ValueOrDefault(string input) => input == null ? "<NULL>" : input.Length == 0 ? "<EMPTY>" : input;
-
-            private static IReservoir CreateReservoir() => new CustomReservoir();
         }
+
+        private static ICounter CreateCounter(string counterName, Unit unit, params (string key, string value)[] tagPairs)
+        {
+            var tags = new MetricTags(tagPairs.Select(tp => tp.key).ToArray(), tagPairs.Select(tp => ValueOrDefault(tp.value)).ToArray());
+
+            return metricsRoot.Provider.Counter.Instance(new CounterOptions
+            {
+                Name = $"({nameof(EGBench)}) {counterName}",
+                MeasurementUnit = unit,
+                ReportItemPercentages = false,
+                ReportSetItems = false,
+                ResetOnReporting = true,
+                Tags = tags,
+            });
+        }
+
+        private static IHistogram CreateHistogram(string counterName, Unit unit, params (string key, string value)[] tagPairs)
+        {
+            var tags = new MetricTags(tagPairs.Select(tp => tp.key).ToArray(), tagPairs.Select(tp => ValueOrDefault(tp.value)).ToArray());
+
+            return metricsRoot.Provider.Histogram.Instance(new HistogramOptions
+            {
+                Name = $"({nameof(EGBench)}) {counterName}",
+                MeasurementUnit = unit,
+                Reservoir = CreateReservoir,
+                Tags = tags,
+            });
+        }
+
+        private static string ValueOrDefault(string input) => input == null ? "<NULL>" : input.Length == 0 ? "<EMPTY>" : input;
+
+        private static IReservoir CreateReservoir() => new CustomReservoir();
 
         /// <summary>
         /// The sliding window reservoir has two problems:
         /// 1. a fixed sample size, which impacts reporting CPU usage (because that array of samples is copied/sorted/etc. whenever its reported)
         /// 2. aggregates are calculated only on the most recent N samples (where N=sampleSize), and thus can miss a majority of the data from the time the last report went out.
         /// If we're doing 10k reports a second, reported once a minute, we'll need a sample size of 600k entries which'll be too expensive to sort/copy (in addition to a LOH hit)
-        /// If we use a more reasonable sample size - say 10k entries, we're effectively only reporting 1 second of data and missing 60 seconds.
+        /// If we use a more reasonable sample size-say 10k entries, we're effectively only reporting 1 second of data and missing 60 seconds.
         /// Thus this custom reservoir exists to allow accurate min/max/mean aggregates (while giving up the stddev/median/percentile aggregates altogether).
         /// </summary>
         private class CustomReservoir : IReservoir

@@ -11,38 +11,38 @@ using McMaster.Extensions.CommandLineUtils;
 
 namespace EGBench
 {
-    internal class EventGridPayloadCreator : IPayloadCreator
+    internal class CloudEvent10PayloadCreator : IPayloadCreator
     {
         private readonly ReadOnlyMemory<byte> prefixBytes;
         private readonly ReadOnlyMemory<byte> postfixBytes;
 
-        public EventGridPayloadCreator(string topicName, uint eventSizeInBytes, ushort eventsPerRequest, IConsole console)
+        public CloudEvent10PayloadCreator(string topicName, uint eventSizeInBytes, ushort eventsPerRequest, IConsole console)
         {
             this.EventsPerRequest = eventsPerRequest;
 
             string eventTimeString = GetEventTimeString();
 
-            var eventGridEvent = new EventGridEvent
+            var cloudEvent = new CloudEvent10
             {
                 Id = "id",
-                Topic = topicName,
+                Source = topicName,
                 Subject = "subject",
-                EventTime = eventTimeString,
-                EventType = "eventType",
-                DataVersion = "v1",
-                MetadataVersion = "1",
+                Time = eventTimeString,
+                Type = "eventType",
+                SpecVersion = "1.0",
+                DataContentType = "application/json",
                 Data = new Dictionary<string, string>
                 {
                     ["Prop"] = string.Empty
                 }
             };
 
-            int envelopeLength = JsonSerializer.SerializeToUtf8Bytes(eventGridEvent).Length;
+            int envelopeLength = JsonSerializer.SerializeToUtf8Bytes(cloudEvent).Length;
             int dataBytesLength = (int)Math.Max(1, eventSizeInBytes - envelopeLength);
 
-            eventGridEvent.Data["Prop"] = new string('a', dataBytesLength);
+            cloudEvent.Data["Prop"] = new string('a', dataBytesLength);
 
-            string serializedEvent = JsonSerializer.Serialize(eventGridEvent);
+            string serializedEvent = JsonSerializer.Serialize(cloudEvent);
             int eventTimeHoleOffset = serializedEvent.IndexOf(eventTimeString, StringComparison.Ordinal);
             string prefix = serializedEvent.Substring(0, eventTimeHoleOffset);
             string postfix = serializedEvent.Substring(eventTimeHoleOffset + eventTimeString.Length);
@@ -53,6 +53,10 @@ namespace EGBench
         }
 
         public ushort EventsPerRequest { get; }
+
+        internal byte[] PrefixBytes { get; }
+
+        internal byte[] PostfixBytes { get; }
 
         public HttpContent CreateHttpContent() => new EventGridAndCloudEventHttpContent(this.prefixBytes, GetEventTimeString(), this.postfixBytes, this.EventsPerRequest);
 
@@ -72,24 +76,24 @@ namespace EGBench
             }
 
             EGBenchLogger.WriteLine(console, $"Sample request payload that'll get sent out: Size={bytesLength} Actual payload=\n{serialized}");
-            _ = JsonSerializer.Deserialize<EventGridEvent[]>(serialized);
+            _ = JsonSerializer.Deserialize<CloudEvent10[]>(serialized);
         }
 
-        private class EventGridEvent
+        private class CloudEvent10
         {
             public string Id { get; set; }
 
-            public string Topic { get; set; }
+            public string Source { get; set; }
 
             public string Subject { get; set; }
 
-            public string EventTime { get; set; }
+            public string Time { get; set; }
 
-            public string EventType { get; set; }
+            public string Type { get; set; }
 
-            public string DataVersion { get; set; }
+            public string SpecVersion { get; set; }
 
-            public string MetadataVersion { get; set; }
+            public string DataContentType { get; set; }
 
             public Dictionary<string, string> Data { get; set; }
         }
