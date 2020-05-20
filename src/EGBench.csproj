@@ -5,9 +5,6 @@
     <AssemblyName>egbench</AssemblyName>
     <ApplicationIcon />
     <TieredCompilation>false</TieredCompilation>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(BuildingInsideVisualStudio)' == 'true'">
     <OutputType>Exe</OutputType>
     <StartupObject>EGBench.CLI</StartupObject>
   </PropertyGroup>
