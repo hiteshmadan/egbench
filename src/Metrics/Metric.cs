@@ -1,7 +1,6 @@
 ﻿// Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -121,7 +120,6 @@ namespace EGBench
             string context = root.RunTag ?? nameof(EGBench);
 
             IMetricsBuilder builder = AppMetrics.CreateDefaultBuilder()
-                // .Filter.With(new NonZeroMetricsFilter())
                 .Filter.With(new MetricsFilter().WhereContext(context))
                 .Configuration.Configure(options =>
                 {
@@ -173,7 +171,7 @@ namespace EGBench
 
             return metricsRoot.Provider.Counter.Instance(new CounterOptions
             {
-                Name = $"({nameof(EGBench)}) {counterName}",
+                Name = $"({nameof(EGBench)})-{counterName}",
                 MeasurementUnit = unit,
                 ReportItemPercentages = false,
                 ReportSetItems = false,
@@ -188,7 +186,7 @@ namespace EGBench
 
             return metricsRoot.Provider.Histogram.Instance(new HistogramOptions
             {
-                Name = $"({nameof(EGBench)}) {counterName}",
+                Name = $"({nameof(EGBench)})-{counterName}",
                 MeasurementUnit = unit,
                 Reservoir = CreateReservoir,
                 Tags = tags,
@@ -197,109 +195,6 @@ namespace EGBench
 
         private static string ValueOrDefault(string input) => input == null ? "<NULL>" : input.Length == 0 ? "<EMPTY>" : input;
 
-        private static IReservoir CreateReservoir() => new CustomReservoir();
-
-        /// <summary>
-        /// The sliding window reservoir has two problems:
-        /// 1. a fixed sample size, which impacts reporting CPU usage (because that array of samples is copied/sorted/etc. whenever its reported)
-        /// 2. aggregates are calculated only on the most recent N samples (where N=sampleSize), and thus can miss a majority of the data from the time the last report went out.
-        /// If we're doing 10k reports a second, reported once a minute, we'll need a sample size of 600k entries which'll be too expensive to sort/copy (in addition to a LOH hit)
-        /// If we use a more reasonable sample size-say 10k entries, we're effectively only reporting 1 second of data and missing 60 seconds.
-        /// Thus this custom reservoir exists to allow accurate min/max/mean aggregates (while giving up the stddev/median/percentile aggregates altogether).
-        /// </summary>
-        private class CustomReservoir : IReservoir
-        {
-            private long count;
-            private double sum;
-            private long max;
-            private long min;
-
-            public CustomReservoir()
-            {
-                this.Reset();
-            }
-
-            public IReservoirSnapshot GetSnapshot(bool resetReservoir) => this.GetSnapshot();
-
-            public IReservoirSnapshot GetSnapshot()
-            {
-                if (this.count == default)
-                {
-                    return Snapshot.Empty;
-                }
-
-                var result = new Snapshot(this.count, this.sum, this.max, this.min);
-
-                // always reset, as the default behavior of Reservoir reporting is to NOT reset.
-                this.Reset();
-                return result;
-            }
-
-            public void Reset()
-            {
-                this.count = default;
-                this.sum = default;
-                this.max = long.MinValue;
-                this.min = long.MaxValue;
-            }
-
-            public void Update(long value, string userValue) => this.Update(value);
-
-            public void Update(long value)
-            {
-                this.count++;
-                this.sum += value;
-                this.max = Math.Max(value, this.max);
-                this.min = Math.Min(value, this.min);
-            }
-
-            private class Snapshot : IReservoirSnapshot
-            {
-                public static readonly Snapshot Empty = new Snapshot(0, 0, 0, 0);
-
-                public Snapshot(long count, double sum, long max, long min)
-                {
-                    this.Count = count;
-                    this.Sum = sum;
-                    this.Max = max;
-                    this.Min = min;
-                    this.Mean = count > 0 ? (sum / count) : 0;
-                }
-
-                public long Count { get; }
-
-                public double Sum { get; }
-
-                public long Max { get; }
-
-                public double Mean { get; }
-
-                public long Min { get; }
-
-                public string MaxUserValue => default;
-
-                public double Median => default;
-
-                public string MinUserValue => default;
-
-                public double Percentile75 => default;
-
-                public double Percentile95 => default;
-
-                public double Percentile98 => default;
-
-                public double Percentile99 => default;
-
-                public double Percentile999 => default;
-
-                public int Size => (int)Math.Min(int.MaxValue, this.Count);
-
-                public double StdDev => default;
-
-                public IEnumerable<long> Values => Array.Empty<long>();
-
-                public double GetValue(double quantile) => 0.0;
-            }
-        }
+        private static IReservoir CreateReservoir() => new LosslessReservoir();
     }
 }

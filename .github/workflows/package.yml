@@ -1,6 +1,6 @@
-name: (On Release) Publish docker image to github package registry
+name: (On Push, Release) Publish docker image to github package registry
 
-on: [release]
+on: [push, release]
 
 jobs:
 
