@@ -109,10 +109,11 @@ namespace EGBench
                         .UseContentRoot(Directory.GetCurrentDirectory())
                         .UseKestrel(options =>
                         {
+                            options.ListenAnyIP(this.Port);
                             options.Limits.MinRequestBodyDataRate = null;
                             options.Limits.MinResponseDataRate = null;
+                            // options.AllowSynchronousIO = true;
                         })
-                        .UseUrls($"http://*:{this.Port}")
                         .ConfigureServices(services =>
                         {
                             services.AddSingleton<StartListenerCommand>(this);
@@ -120,6 +121,7 @@ namespace EGBench
                         .ConfigureLogging(lb =>
                         {
                             lb.SetMinimumLevel(LogLevel.Warning);
+                            lb.AddConsole();
                         })
                         .UseStartup<ListenerStartup>()
                         .Build();

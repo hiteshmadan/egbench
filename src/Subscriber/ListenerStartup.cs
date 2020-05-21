@@ -80,12 +80,13 @@ namespace EGBench
                 while (true)
                 {
                     result = await context.Request.BodyReader.ReadAsync();
+                    resultHasValue |= !result.Buffer.IsEmpty;
+
                     if (result.IsCanceled)
                     {
                         throw new OperationCanceledException("reading was canceled");
                     }
 
-                    resultHasValue |= !result.Buffer.IsEmpty;
                     if (result.IsCompleted)
                     {
                         break;

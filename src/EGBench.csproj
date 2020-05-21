@@ -4,7 +4,7 @@
     <RootNamespace>EGBench</RootNamespace>
     <AssemblyName>egbench</AssemblyName>
     <ApplicationIcon />
-    <TieredCompilation>false</TieredCompilation>
+    <!--<TieredCompilation>false</TieredCompilation>-->
     <OutputType>Exe</OutputType>
     <StartupObject>EGBench.CLI</StartupObject>
   </PropertyGroup>
