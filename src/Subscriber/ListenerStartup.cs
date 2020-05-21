@@ -41,7 +41,22 @@ namespace EGBench
 
         public IServiceProvider ConfigureServices(IServiceCollection services) => services.BuildServiceProvider();
 
-        public void Configure(IApplicationBuilder app) => app.Run(this.RequestHandlerAsync);
+        public void Configure(IApplicationBuilder app)
+        {
+            app.Use(async (HttpContext ctx, Func<Task> next) =>
+            {
+                try
+                {
+                    await next();
+                }
+                catch (Exception ex)
+                {
+                    EGBenchLogger.WriteLine(ex.ToString());
+                    throw;
+                }
+            });
+            app.Run(this.RequestHandlerAsync);
+        }
 
         private static (ICounter eventsMetric, ICounter requestsMetric, IHistogram requestLatencyMetric) SelectMetrics(int resultStatusCode)
         {
@@ -65,12 +80,12 @@ namespace EGBench
                 while (true)
                 {
                     result = await context.Request.BodyReader.ReadAsync();
-                    resultHasValue = true;
                     if (result.IsCanceled)
                     {
                         throw new OperationCanceledException("reading was canceled");
                     }
 
+                    resultHasValue |= !result.Buffer.IsEmpty;
                     if (result.IsCompleted)
                     {
                         break;
@@ -79,32 +94,35 @@ namespace EGBench
                     context.Request.BodyReader.AdvanceTo(result.Buffer.Start);
                 }
 
-                DateTimeOffset finishedReading = DateTimeOffset.Now;
-                this.LogBuffer(result.Buffer);
-                using (var jsonDoc = JsonDocument.Parse(result.Buffer, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip }))
+                if (resultHasValue)
                 {
-                    context.Request.BodyReader.AdvanceTo(result.Buffer.End);
-
-                    switch (jsonDoc.RootElement.ValueKind)
+                    DateTimeOffset finishedReading = DateTimeOffset.Now;
+                    this.LogBuffer(result.Buffer);
+                    using (var jsonDoc = JsonDocument.Parse(result.Buffer, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip }))
                     {
-                        case JsonValueKind.Array:
-                            foreach (JsonElement obj in jsonDoc.RootElement.EnumerateArray())
-                            {
-                                if (obj.ValueKind == JsonValueKind.Object)
+                        context.Request.BodyReader.AdvanceTo(result.Buffer.End);
+
+                        switch (jsonDoc.RootElement.ValueKind)
+                        {
+                            case JsonValueKind.Array:
+                                foreach (JsonElement obj in jsonDoc.RootElement.EnumerateArray())
                                 {
-                                    this.ParseObjectAndLogEventMetrics(obj, this, finishedReading, eventsMetric);
+                                    if (obj.ValueKind == JsonValueKind.Object)
+                                    {
+                                        this.ParseObjectAndLogEventMetrics(obj, this, finishedReading, eventsMetric);
+                                    }
                                 }
-                            }
 
-                            break;
+                                break;
 
-                        case JsonValueKind.Object:
-                            this.ParseObjectAndLogEventMetrics(jsonDoc.RootElement, this, finishedReading, eventsMetric);
+                            case JsonValueKind.Object:
+                                this.ParseObjectAndLogEventMetrics(jsonDoc.RootElement, this, finishedReading, eventsMetric);
 
-                            break;
+                                break;
 
-                        default:
-                            break;
+                            default:
+                                break;
+                        }
                     }
                 }
 
