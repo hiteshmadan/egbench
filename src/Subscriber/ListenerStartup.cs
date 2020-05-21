@@ -92,7 +92,7 @@ namespace EGBench
                         break;
                     }
 
-                    context.Request.BodyReader.AdvanceTo(result.Buffer.Start);
+                    context.Request.BodyReader.AdvanceTo(result.Buffer.Start, result.Buffer.End);
                 }
 
                 if (resultHasValue)
@@ -101,8 +101,6 @@ namespace EGBench
                     this.LogBuffer(result.Buffer);
                     using (var jsonDoc = JsonDocument.Parse(result.Buffer, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip }))
                     {
-                        context.Request.BodyReader.AdvanceTo(result.Buffer.End);
-
                         switch (jsonDoc.RootElement.ValueKind)
                         {
                             case JsonValueKind.Array:
@@ -126,25 +124,28 @@ namespace EGBench
                         }
                     }
                 }
-
-                if (this.delayInMs > 0)
-                {
-                    await Task.Delay(this.delayInMs);
-                }
-
-                requestsMetric.Increment();
-                requestLatencyMetric.Update(startTimestamp.ElapsedMilliseconds);
-                context.Response.StatusCode = resultStatusCode;
             }
-            catch
+            finally
             {
                 if (resultHasValue)
                 {
                     context.Request.BodyReader.AdvanceTo(result.Buffer.End);
                 }
 
-                throw;
+#pragma warning disable VSTHRD103 // Call async methods when in an async method
+                context.Request.BodyReader.Complete();
+#pragma warning restore VSTHRD103 // Call async methods when in an async method
             }
+
+            if (this.delayInMs > 0)
+            {
+                await Task.Delay(this.delayInMs);
+            }
+
+            requestsMetric.Increment();
+            requestLatencyMetric.Update(startTimestamp.ElapsedMilliseconds);
+            context.Response.StatusCode = resultStatusCode;
+            await context.Response.CompleteAsync();
         }
 
         private void ParseObjectAndLogEventMetrics(JsonElement obj, ListenerStartup @this, DateTimeOffset finishedReading, ICounter events)
