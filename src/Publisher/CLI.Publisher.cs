@@ -62,7 +62,7 @@ namespace EGBench
                 public uint EventSizeInBytes { get; set; } = 1024;
 
                 [Option("-t|--runtime-in-minutes", "Time after which the publisher auto-shuts down, defaults to 60 minutes. Set to 0 to run forever.", CommandOptionType.SingleValue)]
-                public ushort RuntimeInMinutes { get; set; } = 60;
+                public ushort RuntimeInMinutes { get; set; } = 120;
 
                 [Option("-v|--protocol-version", "The protocol version to use, defaults to 1.1.", CommandOptionType.SingleValue)]
                 public string HttpVersion { get; set; } = "1.1";
@@ -138,13 +138,16 @@ namespace EGBench
 
                 private static Action<int, Exception> CreateExitHandler(TaskCompletionSource<int> tcs, IConsole console, int runtimeInMinutes)
                 {
-                    _ = Task.Delay(TimeSpan.FromMinutes(runtimeInMinutes)).ContinueWith(
-                        t =>
-                        {
-                            EGBenchLogger.WriteLine(console, $"--runtime-in-minutes ({runtimeInMinutes}) Minutes have passed, stopping the process.");
-                            tcs.TrySetResult(0);
-                        },
-                        TaskScheduler.Default);
+                    if (runtimeInMinutes > 0)
+                    {
+                        _ = Task.Delay(TimeSpan.FromMinutes(runtimeInMinutes)).ContinueWith(
+                            t =>
+                            {
+                                EGBenchLogger.WriteLine(console, $"--runtime-in-minutes ({runtimeInMinutes}) Minutes have passed, stopping the process.");
+                                tcs.TrySetResult(0);
+                            },
+                            TaskScheduler.Default);
+                    }
 
                     return ExitHandler;
 
