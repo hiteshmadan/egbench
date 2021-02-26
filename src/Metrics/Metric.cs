@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using App.Metrics;
 using App.Metrics.Counter;
 using App.Metrics.Filtering;
-using App.Metrics.Formatters.Ascii;
+using App.Metrics.Formatters.InfluxDB;
 using App.Metrics.Histogram;
 using App.Metrics.ReservoirSampling;
 
@@ -114,7 +114,7 @@ namespace EGBench
         {
             if (root == null)
             {
-                throw new NullReferenceException("root should not be null.");
+                throw new InvalidOperationException("root should not be null.");
             }
 
             string context = root.RunTag ?? nameof(EGBench);
@@ -139,7 +139,7 @@ namespace EGBench
                 EGBenchLogger.WriteLine("Reporting metrics to console since --app-insights-key was not specified.");
                 builder.Report.ToConsole(options =>
                 {
-                    options.MetricsOutputFormatter = new MetricsTextOutputFormatter();
+                    options.MetricsOutputFormatter = new MetricsInfluxDbLineProtocolOutputFormatter();
                 });
             }
 

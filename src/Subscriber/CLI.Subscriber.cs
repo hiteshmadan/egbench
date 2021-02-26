@@ -50,13 +50,10 @@ namespace EGBench
                 [Option("|--event-time-property-name", "Defaults to eventTime.", CommandOptionType.SingleValue)]
                 public string EventTimeJsonPropertyName { get; set; } = "eventTime";
 
-                [Option("-m|--mean-delay-ms", "Fixed subscriber delay (in milliseconds). If stdDevDelayInMs is specified, delays are generated via a normal/gaussian distribution, Specify the mean of the distribution here.", CommandOptionType.SingleValue)]
+                [Option("-m|--mean-delay-ms", "Fixed subscriber delay (in milliseconds). Defaults to 0. If stdDevDelayInMs is specified, delays are generated via a normal/gaussian distribution, Specify the mean of the distribution here.", CommandOptionType.SingleValue)]
                 public uint MeanDelayInMs { get; set; } = 0;
 
-                [Option("-s|--stddev-delay-ms", "If non-zero, Subscriber delays (in milliseconds) get generated via a normal/gaussian distribution. Specify the standard deviation of the distribution here.", CommandOptionType.SingleValue)]
-                public uint StdDevDelayInMs { get; set; } = 0;
-
-                [Option("-r|--return-code", "HTTP Status code to be returned, formatted as (%,HttpCode). For instance ... -r \"10,400\" -r \"90:200\" would result in 10% HTTP 400 responses and 90% HTTP 200. All entries must sum to 100%. Valid separators: , : ; | _ <space>", CommandOptionType.MultipleValue)]
+                [Option("-r|--return-code", "HTTP Status code to be returned, formatted as (%,HttpCode). Defaults to 100% HTTP 200. For instance ... -r \"10,400\" -r \"90:200\" would result in 10% HTTP 400 responses and 90% HTTP 200. All entries must sum to 100%. Valid separators: , : ; | _ <space>", CommandOptionType.MultipleValue)]
                 public string[] ReturnStatusCodes { get; set; } = new[] { "100,200" };
 
                 [Option("|--log-payloads", "Log all the payloads received, defaults to false.", CommandOptionType.NoValue)]

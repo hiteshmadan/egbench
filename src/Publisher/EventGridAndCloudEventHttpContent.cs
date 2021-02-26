@@ -13,8 +13,8 @@ namespace EGBench
     internal class EventGridAndCloudEventHttpContent : HttpContent
     {
         private const string JsonContentType = "application/json; charset=utf-8";
-        private static readonly byte[] JsonStartArray = Encoding.UTF8.GetBytes("[");
-        private static readonly byte[] JsonEndArray = Encoding.UTF8.GetBytes("]");
+        private static readonly ReadOnlyMemory<byte> JsonStartArray = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("["));
+        private static readonly ReadOnlyMemory<byte> JsonEndArray = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("]"));
         private static readonly byte[] JsonValueDelimiter = Encoding.UTF8.GetBytes(",");
         private static readonly MediaTypeHeaderValue MediaTypeHeaderValue = MediaTypeHeaderValue.Parse(JsonContentType);
 
@@ -55,18 +55,18 @@ namespace EGBench
 
         public async Task SerializeToStreamAsync(Stream stream)
         {
-            await stream.WriteAsync(JsonStartArray, 0, JsonStartArray.Length);
+            await stream.WriteAsync(JsonStartArray);
             await stream.WriteAsync(this.prefixBytes);
             await stream.WriteAsync(this.eventTimeBytes);
 
-            for (int i = 1; i < this.eventsPerRequest - 1; i++)
+            for (int i = 1; i < this.eventsPerRequest; i++)
             {
                 await stream.WriteAsync(this.postFixCommaPrefixBytes);
                 await stream.WriteAsync(this.eventTimeBytes);
             }
 
             await stream.WriteAsync(this.postfixBytes);
-            await stream.WriteAsync(JsonEndArray, 0, JsonEndArray.Length);
+            await stream.WriteAsync(JsonEndArray);
 
             await stream.FlushAsync();
         }

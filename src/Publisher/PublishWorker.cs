@@ -31,7 +31,13 @@ namespace EGBench
             this.console = console;
             this.exit = exit;
             this.maxConcurrentRequests = new SemaphoreSlim(startPublishCmd.MaxConcurrentRequestsPerPublisher);
-            this.buffer = Channel.CreateBounded<long>(new BoundedChannelOptions(startPublishCmd.RequestsPerSecondPerPublisher * 10) { FullMode = BoundedChannelFullMode.DropWrite, SingleReader = true, SingleWriter = true, AllowSynchronousContinuations = false });
+            this.buffer = Channel.CreateBounded<long>(new BoundedChannelOptions(startPublishCmd.RequestsPerSecondPerPublisher * 10)
+            {
+                FullMode = BoundedChannelFullMode.DropWrite,
+                SingleReader = true,
+                SingleWriter = true,
+                AllowSynchronousContinuations = false
+            });
 
 #pragma warning disable CA2000 // Dispose objects before losing scope
             var httpHandler = new SocketsHttpHandler
@@ -99,15 +105,15 @@ namespace EGBench
 
         private async void PublishFireAndForget(long iteration)
         {
-            Timestamp sendDuration = Timestamp.Now;
             try
             {
                 // TODO: Use publishWorkerId+iteration to seed the event.id parameter.
                 using (HttpContent content = this.payloadCreator.CreateHttpContent())
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
                 using (var request = new HttpRequestMessage(HttpMethod.Post, this.uri) { Content = content, Version = this.httpVersion })
                 {
-                    sendDuration = Timestamp.Now;
-                    using (HttpResponseMessage response = await this.httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead))
+                    Timestamp sendDuration = Timestamp.Now;
+                    using (HttpResponseMessage response = await this.httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token))
                     {
                         (ICounter eventsMetric, ICounter requestsMetric, IHistogram requestLatencyMetric) = SelectMetrics((int)response.StatusCode);
                         requestLatencyMetric.Update(sendDuration.ElapsedMilliseconds);
@@ -119,7 +125,7 @@ namespace EGBench
             catch (Exception ex)
             {
                 Metric.PublishRequestsFailed.Increment();
-                EGBenchLogger.WriteLine(this.console, ex.Message);
+                EGBenchLogger.WriteLine(this.console, $"this.uri={this.uri} ex.Message={ex.Message}");
 
                 // unhandled exceptions in async void methods can bring down the process, swallow all exceptions.
                 // this.exit(1, ex);

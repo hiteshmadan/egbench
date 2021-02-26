@@ -2,6 +2,7 @@
 
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.IO.Pipelines;
 using System.Net;
 using System.Text;
@@ -13,6 +14,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Primitives;
 using static EGBench.CLI.SubscriberCLI;
 
 namespace EGBench
@@ -73,8 +75,13 @@ namespace EGBench
             Timestamp startTimestamp = Timestamp.Now;
             int resultStatusCode = (int)this.statusCodeMap[ThreadSafeRandom.Next(0, 100)];
             (ICounter eventsMetric, ICounter requestsMetric, IHistogram requestLatencyMetric) = SelectMetrics(resultStatusCode);
-            ReadResult result = default;
+            ReadResult result;
             bool resultHasValue = false;
+            if (this.logPayloads)
+            {
+                EGBenchLogger.WriteLine("Headers: " + JsonSerializer.Serialize<IDictionary<string, StringValues>>(context.Request.Headers));
+            }
+
             try
             {
                 while (true)
@@ -92,14 +99,22 @@ namespace EGBench
                         break;
                     }
 
-                    context.Request.BodyReader.AdvanceTo(result.Buffer.Start, result.Buffer.End);
+                    if (resultHasValue)
+                    {
+                        context.Request.BodyReader.AdvanceTo(result.Buffer.Start, result.Buffer.End);
+                    }
                 }
 
                 if (resultHasValue)
                 {
                     DateTimeOffset finishedReading = DateTimeOffset.Now;
-                    this.LogBuffer(result.Buffer);
-                    using (var jsonDoc = JsonDocument.Parse(result.Buffer, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip }))
+                    ReadOnlySequence<byte> buffer = result.Buffer;
+                    if (this.logPayloads)
+                    {
+                        EGBenchLogger.WriteLine(Encoding.UTF8.GetString(buffer.ToArray()));
+                    }
+
+                    using (var jsonDoc = JsonDocument.Parse(buffer, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip }))
                     {
                         switch (jsonDoc.RootElement.ValueKind)
                         {
@@ -116,25 +131,21 @@ namespace EGBench
 
                             case JsonValueKind.Object:
                                 this.ParseObjectAndLogEventMetrics(jsonDoc.RootElement, this, finishedReading, eventsMetric);
-
                                 break;
 
                             default:
                                 break;
                         }
                     }
-                }
-            }
-            finally
-            {
-                if (resultHasValue)
-                {
+
                     context.Request.BodyReader.AdvanceTo(result.Buffer.End);
                 }
 
-#pragma warning disable VSTHRD103 // Call async methods when in an async method
-                context.Request.BodyReader.Complete();
-#pragma warning restore VSTHRD103 // Call async methods when in an async method
+                await context.Request.BodyReader.CompleteAsync();
+            }
+            catch (Exception ex)
+            {
+                await context.Request.BodyReader.CompleteAsync(ex);
             }
 
             if (this.delayInMs > 0)
@@ -166,14 +177,6 @@ namespace EGBench
                         }
                     }
                 }
-            }
-        }
-
-        private void LogBuffer(ReadOnlySequence<byte> buffer)
-        {
-            if (this.logPayloads)
-            {
-                EGBenchLogger.WriteLine(Encoding.UTF8.GetString(buffer.ToArray()));
             }
         }
     }

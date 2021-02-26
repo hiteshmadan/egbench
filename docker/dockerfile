@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/core/aspnet:3.1
-COPY bin/Release/netcoreapp3.1/publish /app
+FROM mcr.microsoft.com/dotnet/core/aspnet:5.0
+COPY bin/Release/net5.0/publish /app
 EXPOSE 8080/tcp
 ENTRYPOINT ["dotnet","/app/egbench.dll"]

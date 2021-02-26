@@ -4,17 +4,19 @@
     <RootNamespace>EGBench</RootNamespace>
     <AssemblyName>egbench</AssemblyName>
     <ApplicationIcon />
-    <!--<TieredCompilation>false</TieredCompilation>-->
+    <TieredCompilation>false</TieredCompilation>
     <OutputType>Exe</OutputType>
     <StartupObject>EGBench.CLI</StartupObject>
+    <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="App.Metrics" Version="4.0.0-preview1.0.9" />
-    <PackageReference Include="App.Metrics.Reporting.Console" Version="4.0.0-preview1.0.9" />
-    <PackageReference Include="App.Metrics.Reporting.ApplicationInsights" Version="1.0.2" />
-    <PackageReference Include="McMaster.Extensions.CommandLineUtils" Version="3.0.0" />
-    <PackageReference Include="System.IO.Pipelines" Version="4.7.1" />
+    <PackageReference Include="App.Metrics" Version="4.1.0" />
+    <PackageReference Include="App.Metrics.Formatters.InfluxDB" Version="4.1.0" />
+    <PackageReference Include="App.Metrics.Reporting.Console" Version="4.1.0" />
+    <PackageReference Include="App.Metrics.Reporting.ApplicationInsights" Version="2.1.0" />
+    <PackageReference Include="McMaster.Extensions.CommandLineUtils" Version="3.1.0" />
+    <PackageReference Include="System.IO.Pipelines" Version="5.0.1" />
   </ItemGroup>
 </Project>

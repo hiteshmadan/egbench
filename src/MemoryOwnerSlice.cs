@@ -9,7 +9,7 @@ namespace EGBench
     {
         private IMemoryOwner<T> inner;
         private Memory<T> memory;
-        private bool disposed = false;
+        private bool disposed;
 
         public MemoryOwnerSlice(IMemoryOwner<T> inner, int startIndex, int length)
         {
