@@ -40,6 +40,7 @@ Options:
                                               forever.
   -v|--protocol-version                       The protocol version to use, defaults to 1.1.
   --skip-ssl-validation                       Skip SSL Server Certificate validation, defaults to false.
+  --log-errors                                Log Status code, reason, and response content of all non-200 responses. Defaults to false.
   -?|-h|--help                                Show help information.
   --runtag                                    Used as a context for metrics reports. Defaults to EGBench.
   --app-insights-key                          AppInsightsKey
@@ -47,13 +48,14 @@ Options:
 ```
 
 ### To setup a listener:
-```Usage: dotnet egbench.dll subscriber start [options]
+```
+Usage: dotnet egbench.dll subscriber start [options]
 
 Options:
   -p|--port                   REQUIRED. Port on which to listen
   -t|--runtime-in-minutes     Time after which the subscriber auto-shuts down, defaults to 120 minutes. Set to 0 to never
                               autoshutdown.
-  --event-time-property-name  Defaults to eventTime.
+  --event-time-property-name  Defaults to eventTime. Use 'time' for Cloud Event v1.0.
   -m|--mean-delay-ms          Fixed subscriber delay (in milliseconds). Defaults to 0. If stdDevDelayInMs is specified, delays are
                               generated via a normal/gaussian distribution, Specify the mean of the distribution here.
   -r|--return-code            HTTP Status code to be returned, formatted as (%,HttpCode). Defaults to 100% HTTP 200. For instance ...

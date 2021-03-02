@@ -12,12 +12,15 @@ namespace EGBench
 {
     internal class EventGridAndCloudEventHttpContent : HttpContent
     {
-        private const string JsonContentType = "application/json; charset=utf-8";
         private static readonly ReadOnlyMemory<byte> JsonStartArray = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("["));
         private static readonly ReadOnlyMemory<byte> JsonEndArray = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("]"));
         private static readonly byte[] JsonValueDelimiter = Encoding.UTF8.GetBytes(",");
-        private static readonly MediaTypeHeaderValue MediaTypeHeaderValue = MediaTypeHeaderValue.Parse(JsonContentType);
 
+        private static readonly MediaTypeHeaderValue ContentTypeApplicationJson = MediaTypeHeaderValue.Parse("application/json; charset=utf-8");
+        private static readonly MediaTypeHeaderValue ContentTypeCloudEventsSingle = MediaTypeHeaderValue.Parse("application/cloudevents+json; charset=utf-8");
+        private static readonly MediaTypeHeaderValue ContentTypeCloudEventsBatch = MediaTypeHeaderValue.Parse("application/cloudevents-batch+json; charset=utf-8");
+
+        private readonly ContentType contentType;
         private readonly ReadOnlyMemory<byte> prefixBytes;
         private readonly ReadOnlyMemory<byte> eventTimeBytes;
         private readonly ReadOnlyMemory<byte> postfixBytes;
@@ -25,8 +28,9 @@ namespace EGBench
         private readonly long contentLength;
         private readonly ReadOnlyMemory<byte> postFixCommaPrefixBytes;
 
-        public EventGridAndCloudEventHttpContent(ReadOnlyMemory<byte> prefixBytes, string eventTimeString, ReadOnlyMemory<byte> postfixBytes, ushort eventsPerRequest)
+        public EventGridAndCloudEventHttpContent(ContentType contentType, ReadOnlyMemory<byte> prefixBytes, string eventTimeString, ReadOnlyMemory<byte> postfixBytes, ushort eventsPerRequest)
         {
+            this.contentType = contentType;
             this.prefixBytes = prefixBytes;
             this.postfixBytes = postfixBytes;
             this.eventsPerRequest = eventsPerRequest;
@@ -46,7 +50,14 @@ namespace EGBench
 
             this.postFixCommaPrefixBytes = postFixCommaPrefixBytes.AsMemory();
 
-            this.Headers.ContentType = MediaTypeHeaderValue;
+            this.Headers.ContentType = contentType switch
+            {
+                ContentType.ApplicationJson => ContentTypeApplicationJson,
+                ContentType.CloudEventsSingle => ContentTypeCloudEventsSingle,
+                ContentType.CloudEventsBatch => ContentTypeCloudEventsBatch,
+                _ => throw new InvalidOperationException($"Unknown contentType {contentType}")
+            };
+
             this.eventTimeBytes = Encoding.UTF8.GetBytes(eventTimeString).AsMemory();
 
             long perEventLength = this.prefixBytes.Length + this.eventTimeBytes.Length + this.postfixBytes.Length + JsonValueDelimiter.Length;
@@ -55,18 +66,27 @@ namespace EGBench
 
         public async Task SerializeToStreamAsync(Stream stream)
         {
-            await stream.WriteAsync(JsonStartArray);
-            await stream.WriteAsync(this.prefixBytes);
-            await stream.WriteAsync(this.eventTimeBytes);
-
-            for (int i = 1; i < this.eventsPerRequest; i++)
+            if (this.contentType == ContentType.CloudEventsSingle)
             {
-                await stream.WriteAsync(this.postFixCommaPrefixBytes);
+                await stream.WriteAsync(this.prefixBytes);
                 await stream.WriteAsync(this.eventTimeBytes);
+                await stream.WriteAsync(this.postfixBytes);
             }
+            else
+            {
+                await stream.WriteAsync(JsonStartArray);
+                await stream.WriteAsync(this.prefixBytes);
+                await stream.WriteAsync(this.eventTimeBytes);
 
-            await stream.WriteAsync(this.postfixBytes);
-            await stream.WriteAsync(JsonEndArray);
+                for (int i = 1; i < this.eventsPerRequest; i++)
+                {
+                    await stream.WriteAsync(this.postFixCommaPrefixBytes);
+                    await stream.WriteAsync(this.eventTimeBytes);
+                }
+
+                await stream.WriteAsync(this.postfixBytes);
+                await stream.WriteAsync(JsonEndArray);
+            }
 
             await stream.FlushAsync();
         }

@@ -17,6 +17,7 @@ namespace EGBench
         private readonly Uri uri;
         private readonly IPayloadCreator payloadCreator;
         private readonly Version httpVersion;
+        private readonly bool logErrors;
         private readonly IConsole console;
         private readonly Action<int, Exception> exit;
         private readonly HttpClient httpClient;
@@ -28,6 +29,7 @@ namespace EGBench
             this.uri = new Uri(startPublishCmd.Address);
             this.payloadCreator = payloadCreator;
             this.httpVersion = new Version(startPublishCmd.HttpVersion);
+            this.logErrors = startPublishCmd.LogErrors;
             this.console = console;
             this.exit = exit;
             this.maxConcurrentRequests = new SemaphoreSlim(startPublishCmd.MaxConcurrentRequestsPerPublisher);
@@ -113,12 +115,17 @@ namespace EGBench
                 using (var request = new HttpRequestMessage(HttpMethod.Post, this.uri) { Content = content, Version = this.httpVersion })
                 {
                     Timestamp sendDuration = Timestamp.Now;
-                    using (HttpResponseMessage response = await this.httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token))
+                    using (HttpResponseMessage response = await this.httpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, cts.Token))
                     {
                         (ICounter eventsMetric, ICounter requestsMetric, IHistogram requestLatencyMetric) = SelectMetrics((int)response.StatusCode);
                         requestLatencyMetric.Update(sendDuration.ElapsedMilliseconds);
                         eventsMetric.Increment(this.payloadCreator.EventsPerRequest);
                         requestsMetric.Increment();
+
+                        if (this.logErrors && response.StatusCode != HttpStatusCode.OK)
+                        {
+                            EGBenchLogger.WriteLine(this.console, $"HTTP {(int)response.StatusCode}. ReasonPhrase={response.ReasonPhrase} ResponseContent={await response.Content.ReadAsStringAsync()}");
+                        }
                     }
                 }
             }

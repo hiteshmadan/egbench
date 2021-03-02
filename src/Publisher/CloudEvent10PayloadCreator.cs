@@ -58,7 +58,7 @@ namespace EGBench
 
         internal byte[] PostfixBytes { get; }
 
-        public HttpContent CreateHttpContent() => new EventGridAndCloudEventHttpContent(this.prefixBytes, GetEventTimeString(), this.postfixBytes, this.EventsPerRequest);
+        public HttpContent CreateHttpContent() => new EventGridAndCloudEventHttpContent(ContentType.CloudEventsBatch, this.prefixBytes, GetEventTimeString(), this.postfixBytes, this.EventsPerRequest);
 
         private static string GetEventTimeString() => DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
 

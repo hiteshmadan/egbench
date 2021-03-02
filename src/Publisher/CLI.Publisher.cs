@@ -70,6 +70,9 @@ namespace EGBench
                 [Option("|--skip-ssl-validation", "Skip SSL Server Certificate validation, defaults to false.", CommandOptionType.NoValue)]
                 public bool SkipServerCertificateValidation { get; set; } = false;
 
+                [Option("|--log-errors", "Log Status code, reason, and response content of all non-200 responses. Defaults to false.", CommandOptionType.NoValue)]
+                public bool LogErrors { get; set; } = false;
+
                 public async Task<int> OnExecuteAsync(CommandLineApplication app, IConsole console)
                 {
                     this.LogOptionValues(console);
@@ -117,7 +120,7 @@ namespace EGBench
                         if (lastLoggedTimestamp.ElapsedSeconds >= this.Parent.Parent.MetricsIntervalSeconds)
                         {
                             lastLoggedTimestamp = Timestamp.Now;
-                            EGBenchLogger.WriteLine(console, $"Enqueued RPS in last {this.Parent.Parent.MetricsIntervalSeconds} seconds={requestsQueued / (float)this.Parent.Parent.MetricsIntervalSeconds:0.00f}");
+                            EGBenchLogger.WriteLine(console, $"Enqueued RPS in last {this.Parent.Parent.MetricsIntervalSeconds} seconds={requestsQueued / (float)this.Parent.Parent.MetricsIntervalSeconds:0.00f}. Desired RPS={this.RequestsPerSecondPerPublisher * this.ConcurrentPublishersCount}. EventsPerRequest={this.EventsPerRequest}");
                             requestsQueued = 0;
                         }
 
