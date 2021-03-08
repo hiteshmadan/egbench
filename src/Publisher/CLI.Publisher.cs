@@ -73,6 +73,9 @@ namespace EGBench
                 [Option("|--log-errors", "Log Status code, reason, and response content of all non-200 responses. Defaults to false.", CommandOptionType.NoValue)]
                 public bool LogErrors { get; set; } = false;
 
+                [Option("--total-requests", "Total number of requests to be made at the configured rate. When done, the publisher process will exit. Defaults to 0.", CommandOptionType.SingleValue)]
+                public long TotalRequests { get; set; }
+
                 public async Task<int> OnExecuteAsync(CommandLineApplication app, IConsole console)
                 {
                     this.LogOptionValues(console);
@@ -108,13 +111,23 @@ namespace EGBench
                     EGBenchLogger.WriteLine(console, $"{nameof(timerIntervalMs)}={timerIntervalMs} ms | Desired RPS={this.ConcurrentPublishersCount * this.RequestsPerSecondPerPublisher}");
 
                     long requestsQueued = 0;
+                    long totalRequestsQueued = 0;
                     Timestamp lastLoggedTimestamp = Timestamp.Now;
                     Timestamp beginTimestamp = Timestamp.Now;
                     for (long iteration = 0; !(tcs.Task.IsCanceled | tcs.Task.IsFaulted | tcs.Task.IsCompletedSuccessfully); iteration++)
                     {
                         foreach (PublishWorker worker in workers)
                         {
-                            requestsQueued += worker.TryEnqueue(iteration) ? 1 : 0;
+                            if (worker.TryEnqueue(iteration))
+                            {
+                                requestsQueued++;
+                                totalRequestsQueued++;
+                            }
+
+                            if (this.TotalRequests > 0 && totalRequestsQueued >= this.TotalRequests)
+                            {
+                                break;
+                            }
                         }
 
                         if (lastLoggedTimestamp.ElapsedSeconds >= this.Parent.Parent.MetricsIntervalSeconds)
@@ -122,6 +135,20 @@ namespace EGBench
                             lastLoggedTimestamp = Timestamp.Now;
                             EGBenchLogger.WriteLine(console, $"Enqueued RPS in last {this.Parent.Parent.MetricsIntervalSeconds} seconds={requestsQueued / (float)this.Parent.Parent.MetricsIntervalSeconds:0.00f}. Desired RPS={this.RequestsPerSecondPerPublisher * this.ConcurrentPublishersCount}. EventsPerRequest={this.EventsPerRequest}");
                             requestsQueued = 0;
+                        }
+
+                        if (this.TotalRequests > 0 && totalRequestsQueued >= this.TotalRequests)
+                        {
+                            await Task.WhenAll(workers.Select(async w =>
+                            {
+                                await Task.Yield();
+                                await w.StopAsync();
+                            }).ToArray());
+
+                            EGBenchLogger.WriteLine($"Total Requests Made: {totalRequestsQueued}");
+
+                            tcs.TrySetResult(0);
+                            break;
                         }
 
                         Timestamp expectedTimestampNow = beginTimestamp + TimeSpan.FromMilliseconds(iteration * timerIntervalMs);

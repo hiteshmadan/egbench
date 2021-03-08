@@ -30,6 +30,8 @@ namespace EGBench
 
         public TimeSpan Elapsed => new TimeSpan(this.GetElapsedTicks());
 
+        public long Ticks => this.timestamp;
+
         public long ElapsedMilliseconds => this.GetElapsedTicks() / TimeSpan.TicksPerMillisecond;
 
         public long ElapsedSeconds => this.GetElapsedTicks() / TimeSpan.TicksPerSecond;
@@ -61,6 +63,8 @@ namespace EGBench
         }
 
         public static TimeSpan operator -(Timestamp t1, Timestamp t2) => t1.Subtract(t2);
+
+        public static Timestamp FromTicks(long ticks) => new Timestamp(ticks);
 
         public bool Equals(Timestamp other) => this.timestamp == other.timestamp;
 

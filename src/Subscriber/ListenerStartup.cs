@@ -7,6 +7,7 @@ using System.IO.Pipelines;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using App.Metrics.Counter;
 using App.Metrics.Histogram;
@@ -25,13 +26,17 @@ namespace EGBench
         private readonly string eventTimePropertyName;
         private readonly bool logPayloads;
         private readonly HttpStatusCode[] statusCodeMap;
+        private readonly int consoleLogIntervalInSeconds;
+        private long requestsReceived;
+        private long lastLoggedTimestampTicks;
 
         public ListenerStartup(StartListenerCommand startListenerCommand)
         {
             this.delayInMs = (int)Math.Max(0, startListenerCommand.MeanDelayInMs);
             this.eventTimePropertyName = startListenerCommand.EventTimeJsonPropertyName;
             this.logPayloads = startListenerCommand.LogPayloads;
-
+            this.lastLoggedTimestampTicks = Timestamp.Now.Ticks;
+            this.consoleLogIntervalInSeconds = startListenerCommand.Parent.Parent.MetricsIntervalSeconds;
             this.statusCodeMap = new HttpStatusCode[100];
             Span<HttpStatusCode> span = this.statusCodeMap.AsSpan();
             foreach ((int percent, HttpStatusCode code) in startListenerCommand.StatusCodeMap)
@@ -70,6 +75,36 @@ namespace EGBench
             };
         }
 
+        private static void ParseObjectAndLogEventMetrics(JsonElement obj, ListenerStartup @this, DateTimeOffset finishedReading, ICounter events)
+        {
+            events.Increment();
+
+            bool foundTimeProperty = false;
+            foreach (JsonProperty property in obj.EnumerateObject())
+            {
+                if (property.Name.Equals(@this.eventTimePropertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (property.Value.TryGetDateTimeOffset(out DateTimeOffset value))
+                    {
+                        foundTimeProperty = true;
+                        TimeSpan e2eDelay = finishedReading - value;
+                        long totalMs = (long)e2eDelay.TotalMilliseconds;
+                        if (totalMs > 0)
+                        {
+                            Metric.SubscribeE2ELatencyMs.Update(totalMs);
+                        }
+
+                        break;
+                    }
+                }
+            }
+
+            if (!foundTimeProperty)
+            {
+                EGBenchLogger.WriteLine($"Not reporting E2E Latency since the time property {@this.eventTimePropertyName} was not found on the payload.");
+            }
+        }
+
         private async Task RequestHandlerAsync(HttpContext context)
         {
             Timestamp startTimestamp = Timestamp.Now;
@@ -80,6 +115,21 @@ namespace EGBench
             if (this.logPayloads)
             {
                 EGBenchLogger.WriteLine("Headers: " + JsonSerializer.Serialize<IDictionary<string, StringValues>>(context.Request.Headers));
+            }
+
+            Interlocked.Increment(ref this.requestsReceived);
+
+            long lastLoggedTicks = this.lastLoggedTimestampTicks;
+            Timestamp lastLoggedTimestamp = Timestamp.FromTicks(lastLoggedTicks);
+            Timestamp now = Timestamp.Now;
+
+            if (lastLoggedTimestamp.ElapsedSeconds >= this.consoleLogIntervalInSeconds)
+            {
+                if (lastLoggedTicks == Interlocked.CompareExchange(ref this.lastLoggedTimestampTicks, now.Ticks, lastLoggedTicks))
+                {
+                    long requestsReceivedLocal = Interlocked.Exchange(ref this.requestsReceived, 0);
+                    EGBenchLogger.WriteLine($"Received (success+fail) RPS in last {this.consoleLogIntervalInSeconds} seconds={requestsReceivedLocal / this.consoleLogIntervalInSeconds}");
+                }
             }
 
             try
@@ -123,14 +173,14 @@ namespace EGBench
                                 {
                                     if (obj.ValueKind == JsonValueKind.Object)
                                     {
-                                        this.ParseObjectAndLogEventMetrics(obj, this, finishedReading, eventsMetric);
+                                        ParseObjectAndLogEventMetrics(obj, this, finishedReading, eventsMetric);
                                     }
                                 }
 
                                 break;
 
                             case JsonValueKind.Object:
-                                this.ParseObjectAndLogEventMetrics(jsonDoc.RootElement, this, finishedReading, eventsMetric);
+                                ParseObjectAndLogEventMetrics(jsonDoc.RootElement, this, finishedReading, eventsMetric);
                                 break;
 
                             default:
@@ -157,27 +207,6 @@ namespace EGBench
             requestLatencyMetric.Update(startTimestamp.ElapsedMilliseconds);
             context.Response.StatusCode = resultStatusCode;
             await context.Response.CompleteAsync();
-        }
-
-        private void ParseObjectAndLogEventMetrics(JsonElement obj, ListenerStartup @this, DateTimeOffset finishedReading, ICounter events)
-        {
-            events.Increment();
-
-            foreach (JsonProperty property in obj.EnumerateObject())
-            {
-                if (property.Name.Equals(@this.eventTimePropertyName, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (property.Value.TryGetDateTimeOffset(out DateTimeOffset value))
-                    {
-                        TimeSpan e2eDelay = finishedReading - value;
-                        long totalMs = (long)e2eDelay.TotalMilliseconds;
-                        if (totalMs > 0)
-                        {
-                            Metric.SubscribeE2ELatencyMs.Update(totalMs);
-                        }
-                    }
-                }
-            }
         }
     }
 }

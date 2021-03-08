@@ -23,6 +23,7 @@ namespace EGBench
         private readonly HttpClient httpClient;
         private readonly Channel<long> buffer;
         private readonly SemaphoreSlim maxConcurrentRequests;
+        private long inflightPublishTasks;
 
         public PublishWorker(CLI.PublisherCLI.StartPublishCommand startPublishCmd, IPayloadCreator payloadCreator, IConsole console, Action<int, Exception> exit)
         {
@@ -81,6 +82,17 @@ namespace EGBench
 
         public bool TryEnqueue(long iteration) => this.buffer.Writer.TryWrite(iteration);
 
+        public async Task StopAsync()
+        {
+            this.buffer.Writer.Complete();
+            await this.buffer.Reader.Completion;
+
+            while (Interlocked.CompareExchange(ref this.inflightPublishTasks, 0, 0) > 0)
+            {
+                await Task.Delay(50);
+            }
+        }
+
         private static (ICounter eventsMetric, ICounter requestsMetric, IHistogram requestLatencyMetric) SelectMetrics(int resultStatusCode)
         {
             return ((int)(resultStatusCode / 100)) switch
@@ -93,15 +105,14 @@ namespace EGBench
 
         private async Task PublishLoopAsync()
         {
-            while (true)
+            while (await this.buffer.Reader.WaitToReadAsync())
             {
                 while (this.buffer.Reader.TryRead(out long iteration))
                 {
                     await this.maxConcurrentRequests.WaitAsync();
+                    Interlocked.Increment(ref this.inflightPublishTasks);
                     ThreadPool.UnsafeQueueUserWorkItem(this.PublishFireAndForget, iteration, true);
                 }
-
-                await this.buffer.Reader.WaitToReadAsync();
             }
         }
 
@@ -139,6 +150,7 @@ namespace EGBench
             }
             finally
             {
+                Interlocked.Decrement(ref this.inflightPublishTasks);
                 this.maxConcurrentRequests.Release();
             }
         }
