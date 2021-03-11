@@ -23,6 +23,7 @@ namespace EGBench
         private static readonly Unit UnitMs = Unit.Custom("ms");
         private static readonly Unit UnitCount = Unit.Custom("count");
         private static IMetricsRoot metricsRoot;
+        private static bool isConsole;
 
         public static ICounter PublishEventsSuccess { get; private set; }
 
@@ -136,6 +137,7 @@ namespace EGBench
             }
             else
             {
+                isConsole = true;
                 EGBenchLogger.WriteLine("Reporting metrics to console since --app-insights-key was not specified.");
                 builder.Report.ToConsole(options =>
                 {
@@ -149,17 +151,24 @@ namespace EGBench
 
             static async Task ReportingLoop(IMetricsRoot @metrics, int metricsIntervalSeconds)
             {
+                Timestamp lastStartTime = Timestamp.Now;
+
                 while (true)
                 {
-                    await Task.Delay(metricsIntervalSeconds * 1000);
+                    int waitInSeconds = Math.Clamp(metricsIntervalSeconds - (int)lastStartTime.ElapsedSeconds, 0, metricsIntervalSeconds);
+                    if (waitInSeconds > 0)
+                    {
+                        await Task.Delay(waitInSeconds * 1000);
+                    }
 
+                    lastStartTime = Timestamp.Now;
                     try
                     {
                         await Task.WhenAll(@metrics.ReportRunner.RunAllAsync(CancellationToken.None));
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        // TODO: Log exception somewhere?
+                        EGBenchLogger.WriteLine($"Metrics reporting exception: {ex.Message}");
                     }
                 }
             }
@@ -175,8 +184,9 @@ namespace EGBench
                 MeasurementUnit = unit,
                 ReportItemPercentages = false,
                 ReportSetItems = false,
-                ResetOnReporting = true,
                 Tags = tags,
+                // If console, we don't have any failures or delays and thus want to see the "diff-ed" numbers instead of cumulative count.
+                ResetOnReporting = isConsole
             });
         }
 
