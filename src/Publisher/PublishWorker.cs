@@ -135,7 +135,18 @@ namespace EGBench
 
                         if (this.logErrors && response.StatusCode != HttpStatusCode.OK)
                         {
-                            EGBenchLogger.WriteLine(this.console, $"HTTP {(int)response.StatusCode}. ReasonPhrase={response.ReasonPhrase} ResponseContent={await response.Content.ReadAsStringAsync()}");
+                            string errorJson;
+                            try
+                            {
+                                errorJson = await response.Content.ReadAsStringAsync(cts.Token);
+                                errorJson = errorJson.Replace("    ", string.Empty, StringComparison.Ordinal);
+                            }
+                            catch (Exception ex)
+                            {
+                                errorJson = $"Error when reading response content as string. Ex={ex}";
+                            }
+
+                            EGBenchLogger.WriteLine(this.console, $"HTTP {(int)response.StatusCode}. ResponseContent={errorJson}");
                         }
                     }
                 }
