@@ -19,6 +19,7 @@ namespace EGBench
         private const string Success = nameof(Success);
         private const string UserError = nameof(UserError);
         private const string SystemError = nameof(SystemError);
+        private const string ClientError = nameof(ClientError);
 
         private static readonly Unit UnitMs = Unit.Custom("ms");
         private static readonly Unit UnitCount = Unit.Custom("count");
@@ -85,7 +86,7 @@ namespace EGBench
             PublishRequestsSystemError = CreateCounter("Publish-Requests", UnitCount, (Status, SystemError));
             PublishRequestLatencyMsSystemError = CreateHistogram("Publish-Request Latency (ms)", UnitMs, (Status, SystemError));
 
-            PublishRequestsFailed = CreateCounter("Publish-Requests Failed", UnitCount);
+            PublishRequestsFailed = CreateCounter("Publish-Requests", UnitCount, (Status, ClientError));
         }
 
         public static void InitializeSubscriber(CLI root)
