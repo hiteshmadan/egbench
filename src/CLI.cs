@@ -13,7 +13,7 @@ namespace EGBench
         [Option("|--runtag", Description = "Used as a context for metrics reports. Defaults to EGBench.", Inherited = true)]
         public string RunTag { get; set; }
 
-        [Option("|--app-insights-key", Inherited = true)]
+        [Option("|--app-insights-key", Description = "Azure Application Insights key. If null, metrics are written to console in influxdb single lineformat.", Inherited = true)]
         public (bool HasValue, string Value) AppInsightsKey { get; set; }
 
         [Option("|--metrics-interval-seconds", Description = "Frequency of reporting metrics out to console/azmonitor. Defaults to 60", Inherited = true)]

@@ -21,20 +21,20 @@ namespace EGBench
         private readonly IConsole console;
         private readonly Action<int, Exception> exit;
         private readonly HttpClient httpClient;
-        private readonly Channel<long> buffer;
+        private readonly Channel<long> tenSecondBuffer;
         private readonly SemaphoreSlim maxConcurrentRequests;
         private long inflightPublishTasks;
 
-        public PublishWorker(CLI.PublisherCLI.StartPublishCommand startPublishCmd, IPayloadCreator payloadCreator, IConsole console, Action<int, Exception> exit)
+        public PublishWorker(CLI.PublisherCLI.StartPublishCommand startPublishCmd, string address, IPayloadCreator payloadCreator, IConsole console, Action<int, Exception> exit)
         {
-            this.uri = new Uri(startPublishCmd.Address);
+            this.uri = new Uri(address);
             this.payloadCreator = payloadCreator;
             this.httpVersion = new Version(startPublishCmd.HttpVersion);
             this.logErrors = startPublishCmd.LogErrors;
             this.console = console;
             this.exit = exit;
             this.maxConcurrentRequests = new SemaphoreSlim(startPublishCmd.MaxConcurrentRequestsPerPublisher);
-            this.buffer = Channel.CreateBounded<long>(new BoundedChannelOptions(startPublishCmd.RequestsPerSecondPerPublisher * 10)
+            this.tenSecondBuffer = Channel.CreateBounded<long>(new BoundedChannelOptions(startPublishCmd.RequestsPerSecondPerPublisher * 10)
             {
                 FullMode = BoundedChannelFullMode.DropWrite,
                 SingleReader = true,
@@ -80,12 +80,12 @@ namespace EGBench
             this.maxConcurrentRequests?.Dispose();
         }
 
-        public bool TryEnqueue(long iteration) => this.buffer.Writer.TryWrite(iteration);
+        public bool TryEnqueue(long iteration) => this.tenSecondBuffer.Writer.TryWrite(iteration);
 
         public async Task StopAsync()
         {
-            this.buffer.Writer.Complete();
-            await this.buffer.Reader.Completion;
+            this.tenSecondBuffer.Writer.Complete();
+            await this.tenSecondBuffer.Reader.Completion;
 
             while (Interlocked.CompareExchange(ref this.inflightPublishTasks, 0, 0) > 0)
             {
@@ -105,9 +105,9 @@ namespace EGBench
 
         private async Task PublishLoopAsync()
         {
-            while (await this.buffer.Reader.WaitToReadAsync())
+            while (await this.tenSecondBuffer.Reader.WaitToReadAsync())
             {
-                while (this.buffer.Reader.TryRead(out long iteration))
+                while (this.tenSecondBuffer.Reader.TryRead(out long iteration))
                 {
                     await this.maxConcurrentRequests.WaitAsync();
                     Interlocked.Increment(ref this.inflightPublishTasks);
@@ -139,7 +139,10 @@ namespace EGBench
                             try
                             {
                                 errorJson = await response.Content.ReadAsStringAsync(cts.Token);
-                                errorJson = errorJson.Replace("    ", string.Empty, StringComparison.Ordinal);
+                                errorJson = errorJson
+                                    .Replace("\r", string.Empty, StringComparison.Ordinal)
+                                    .Replace("\n", string.Empty, StringComparison.Ordinal)
+                                    .Replace("    ", string.Empty, StringComparison.Ordinal);
                             }
                             catch (Exception ex)
                             {

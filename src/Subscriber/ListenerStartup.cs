@@ -75,7 +75,7 @@ namespace EGBench
             };
         }
 
-        private static void ParseObjectAndLogEventMetrics(JsonElement obj, ListenerStartup @this, DateTimeOffset finishedReading, ICounter events)
+        private static void ReportE2ELatency(JsonElement obj, ListenerStartup @this, DateTimeOffset finishedReading, ICounter events)
         {
             events.Increment();
 
@@ -112,12 +112,12 @@ namespace EGBench
             (ICounter eventsMetric, ICounter requestsMetric, IHistogram requestLatencyMetric) = SelectMetrics(resultStatusCode);
             ReadResult result;
             bool resultHasValue = false;
+            long requestId = Interlocked.Increment(ref this.requestsReceived);
+
             if (this.logPayloads)
             {
-                EGBenchLogger.WriteLine("Headers: " + JsonSerializer.Serialize<IDictionary<string, StringValues>>(context.Request.Headers));
+                EGBenchLogger.WriteLine($"Request {requestId} Headers: {JsonSerializer.Serialize<IDictionary<string, StringValues>>(context.Request.Headers)}");
             }
-
-            Interlocked.Increment(ref this.requestsReceived);
 
             long lastLoggedTicks = this.lastLoggedTimestampTicks;
             Timestamp lastLoggedTimestamp = Timestamp.FromTicks(lastLoggedTicks);
@@ -161,7 +161,7 @@ namespace EGBench
                     ReadOnlySequence<byte> buffer = result.Buffer;
                     if (this.logPayloads)
                     {
-                        EGBenchLogger.WriteLine(Encoding.UTF8.GetString(buffer.ToArray()));
+                        EGBenchLogger.WriteLine($"Request {requestId} Payload: {Encoding.UTF8.GetString(buffer.ToArray())}");
                     }
 
                     using (var jsonDoc = JsonDocument.Parse(buffer, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip }))
@@ -173,14 +173,19 @@ namespace EGBench
                                 {
                                     if (obj.ValueKind == JsonValueKind.Object)
                                     {
-                                        ParseObjectAndLogEventMetrics(obj, this, finishedReading, eventsMetric);
+                                        ReportE2ELatency(obj, this, finishedReading, eventsMetric);
                                     }
                                 }
 
                                 break;
 
                             case JsonValueKind.Object:
-                                ParseObjectAndLogEventMetrics(jsonDoc.RootElement, this, finishedReading, eventsMetric);
+                                if (!context.Request.Headers.TryGetValue("aeg-delivery-count", out StringValues values) ||
+                                    (values.Count > 0 && string.Equals(values[0], "0", StringComparison.Ordinal)))
+                                {
+                                    ReportE2ELatency(jsonDoc.RootElement, this, finishedReading, eventsMetric);
+                                }
+
                                 break;
 
                             default:

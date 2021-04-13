@@ -44,11 +44,8 @@ namespace EGBench
                 [Required]
                 public ushort Port { get; set; }
 
-                [Option("-t|--runtime-in-minutes", "Time after which the subscriber auto-shuts down, defaults to 120 minutes. Set to 0 to never autoshutdown.", CommandOptionType.SingleValue)]
-                public ushort RuntimeInMinutes { get; set; } = 120;
-
-                [Option("|--event-time-property-name", "Defaults to eventTime. Use 'time' for Cloud Event v1.0.", CommandOptionType.SingleValue)]
-                public string EventTimeJsonPropertyName { get; set; } = "eventTime";
+                [Option("-t|--runtime-in-minutes", "Time after which the subscriber auto-shuts down, defaults to 0 minutes. Set to 0 to run forever.", CommandOptionType.SingleValue)]
+                public ushort RuntimeInMinutes { get; set; } = 0;
 
                 [Option("-m|--mean-delay-ms", "Fixed subscriber delay (in milliseconds). Defaults to 0. If stdDevDelayInMs is specified, delays are generated via a normal/gaussian distribution, Specify the mean of the distribution here.", CommandOptionType.SingleValue)]
                 public uint MeanDelayInMs { get; set; } = 0;
@@ -58,6 +55,9 @@ namespace EGBench
 
                 [Option("|--log-payloads", "Log all the payloads received, defaults to false.", CommandOptionType.NoValue)]
                 public bool LogPayloads { get; set; } = false;
+
+                [Option("|--event-time-property-name", "Defaults to time (for Cloud Event Schema 1.0). Use 'eventTime' for EventGrid schema.", CommandOptionType.SingleValue)]
+                public string EventTimeJsonPropertyName { get; set; } = "time";
 
                 internal (int percent, HttpStatusCode statusCode)[] StatusCodeMap { get; set; }
 
